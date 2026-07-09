@@ -1103,7 +1103,18 @@
         function tryPlaceInlineBtn() {
             const buyBtn = document.querySelector('button.product-buy:not(#product-buy-floating), button.product-buy, .js-addtocart, .btn-add-to-cart, [data-component="product.add-to-cart"]');
             if (buyBtn) {
-                buyBtn.parentNode.insertBefore(inlineBtn, buyBtn);
+                const parent = buyBtn.parentNode;
+                // Na FBITS o "Comprar" fica numa linha grid/flex (ex: quantidade | comprar, o
+                // container .product-buttons é display:grid). Injetar o provador como IRMÃO vira
+                // uma célula extra que quebra o grid (empurra/espreme o botão de compra). Se o pai
+                // é grid/flex, colocamos o botão ANTES do container inteiro (linha própria acima).
+                let pd = '';
+                try { pd = parent ? getComputedStyle(parent).display : ''; } catch (_) {}
+                if ((pd === 'grid' || pd === 'inline-grid' || pd === 'flex' || pd === 'inline-flex') && parent.parentNode) {
+                    parent.parentNode.insertBefore(inlineBtn, parent);
+                } else {
+                    parent.insertBefore(inlineBtn, buyBtn);
+                }
                 return true;
             }
             const variantsContainer = document.querySelector('.js-product-variants');
