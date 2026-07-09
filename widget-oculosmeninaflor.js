@@ -122,7 +122,8 @@
             --c-ink: #111111;
             --c-muted: #999;
             --c-line: #e8e8e8;
-            --c-accent: #111111;
+            --c-accent: #ff56ff;
+            --c-accent-dark: #f02ff0;
             --c-danger: #cc3333;
             --font-display: inherit;
             --font-body: inherit;
@@ -147,13 +148,13 @@
         .q-btn-inline-provador {
             display: flex; align-items: center; justify-content: center; gap: 7px;
             width: 100%; padding: 13px 16px;
-            background: transparent; color: var(--c-ink);
-            border: 1.5px solid var(--c-ink); border-radius: 0;
+            background: var(--c-accent); color: #fff;
+            border: 1.5px solid var(--c-accent); border-radius: 0;
             font-family: 'Work Sans', var(--font-body), sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
             cursor: pointer; transition: background 0.25s, color 0.25s;
             margin: 16px 0 4px; box-sizing: border-box;
         }
-        .q-btn-inline-provador:hover { background: var(--c-ink); color: #fff; }
+        .q-btn-inline-provador:hover { background: var(--c-accent-dark); color: #fff; }
         .q-btn-inline-provador svg { width: 14px; height: 14px; flex-shrink: 0; }
 
         /* ── Modal overlay ── */
@@ -381,7 +382,7 @@
         /* ── CTA buttons ── */
         .q-btn-black {
             width: 100%; height: 52px;
-            background: var(--c-ink); color: #fff;
+            background: var(--c-accent); color: #fff;
             border: none; border-radius: 14px;
             font-family: var(--font-display); font-size: 14px;
             letter-spacing: 3px; text-transform: uppercase;
@@ -541,7 +542,7 @@
         .q-fakebuy span { font-size: 10.5px; color: var(--c-muted); }
         @media (max-width:560px){ .q-fakebuy{ left:12px; right:12px; bottom:12px; max-width:none; } }
         .q-btn-buy-now {
-            background: var(--c-ink); color: #fff; border: 1px solid var(--c-ink);
+            background: var(--c-accent); color: #fff; border: 1px solid var(--c-accent);
             width: 100%; padding: 17px 18px; font-family: var(--font-body);
             font-weight: 700; font-size: 15px; letter-spacing: .2px; cursor: pointer;
             display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -707,6 +708,7 @@
 
                         <div id="q-validation-hint" class="q-validation-hint"></div>
                         <button class="q-btn-black" id="q-btn-generate">Provar &#243;culos</button>
+                        <div class="q-provas-msg" id="q-provas-msg"></div>
                     </div>
 
                     <!-- PIX -->
@@ -1321,6 +1323,25 @@
             return faceDetectPromise;
         }
 
+        // Contador de provas restantes: consulta o check-limit (por IP na abertura; + telefone
+        // se já digitado) e mostra "Você tem X provas grátis hoje" na tela inicial.
+        function checkProvasRestantes() {
+            var el = document.getElementById('q-provas-msg');
+            if (!el) return;
+            var ph = '';
+            try { ph = (typeof phoneInput !== 'undefined' && phoneInput && phoneInput.value) ? ('55' + phoneInput.value.replace(/\D/g, '')) : ''; } catch (e) {}
+            fetch(WEBHOOK_CHECK_LIMIT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: ph }) })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    var limit = d.limit || 3;
+                    var used = Math.max(d.phone_count || 0, d.ip_count || 0);
+                    var rem = Math.max(0, limit - used);
+                    el.classList.remove('is-warn');
+                    if (rem <= 0) { el.textContent = 'Você já usou suas ' + limit + ' provas grátis de hoje 💜'; el.classList.add('is-warn'); }
+                    else { el.textContent = '💜 Você tem ' + rem + (rem === 1 ? ' prova' : ' provas') + ' grátis hoje (de ' + limit + ')'; if (rem === 1) el.classList.add('is-warn'); }
+                })
+                .catch(function () {});
+        }
         function openModal() {
             try { startFaceDetect(); } catch (e) {}
             plTrackOpen();
@@ -1334,6 +1355,7 @@
             modal.style.display = 'flex';
             lockBodyScroll();
             // Mostra contador imediatamente (só por IP) ao abrir o modal
+            try { checkProvasRestantes(); } catch (e) {}
         }
 
 
