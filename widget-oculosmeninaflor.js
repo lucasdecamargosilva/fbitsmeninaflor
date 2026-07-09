@@ -668,6 +668,7 @@
                             <input type="tel" id="q-phone" class="q-input" placeholder="(11) 99999-9999" maxlength="15">
                             <div id="q-phone-error" class="q-status-msg">N&#250;mero inv&#225;lido</div>
                         </div>
+                        <div class="q-provas-msg" id="q-provas-msg"></div>
 
                         <!-- Photo section -->
                         <p class="q-section-label">Envie sua foto</p>
@@ -708,7 +709,6 @@
 
                         <div id="q-validation-hint" class="q-validation-hint"></div>
                         <button class="q-btn-black" id="q-btn-generate">Provar &#243;culos</button>
-                        <div class="q-provas-msg" id="q-provas-msg"></div>
                     </div>
 
                     <!-- PIX -->
