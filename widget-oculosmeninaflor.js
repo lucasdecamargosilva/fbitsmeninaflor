@@ -131,9 +131,9 @@
         /* ── Trigger (selo sobre foto) ── */
         @keyframes q-shake { 0%,50%,100%{transform:rotate(0deg)} 10%,30%{transform:rotate(-10deg)} 20%,40%{transform:rotate(10deg)} }
         .q-btn-trigger-ia {
-            position: absolute; top: 14px; right: 14px; z-index: 100;
-            background: none; border: none; padding: 0; cursor: pointer;
-            width: 70px; height: 70px;
+            position: absolute !important; top: 14px !important; right: 14px !important; left: auto !important; bottom: auto !important; z-index: 100 !important;
+            background: none; border: none; padding: 0 !important; margin: 0 !important; cursor: pointer;
+            width: 70px !important; height: 70px !important; max-width: 70px !important; box-sizing: border-box;
             display: flex; align-items: center; justify-content: center;
             filter: drop-shadow(0 3px 10px rgba(0,0,0,0.22));
             animation: q-shake 3s infinite;
@@ -656,7 +656,7 @@
                     <!-- Persistent header (all steps) -->
                     <div id="q-header-provador">
                         <h1>Provador Virtual</h1>
-                        <img src="https://lotusoculos.fbitsstatic.net/sf/img/Logo.png?theme=loja_com_novo_checkout&v=202606271648&w=" alt="Óculos Menina Flor" style="height:28px;width:auto;"/>
+                        <img src="https://lotusoculos.fbitsstatic.net/sf/img/Logo.png?theme=loja_com_novo_checkout&v=202606271648&w=" alt="Óculos Menina Flor" style="height:44px;width:auto;max-width:200px;object-fit:contain;"/>
                     </div>
 
                     <!-- Main step -->
@@ -1015,26 +1015,36 @@
 
         const imgContainers = ['.product-image.product-principal', '.product-zoom__images.product-principal', '.product-image', '.js-product-slide', '.product-image-column', '.js-swiper-product', '[data-store^="product-image-"]', '.product__media-wrapper', '.product-gallery__media', '.product__media', '.product-image-main', '.product-media-container', '[data-media-id]', '.product__media-item', '.product-gallery', '.product-single__media', '.media-gallery'];
 
+        // A FBITS (e outros temas) usam carrossel slick que RECONSTRÓI a track nas trocas de
+        // foto/variante e engole o botão (que sumia até recarregar a página). Se o container
+        // escolhido é/está dentro de um slick, ancoramos no PAI do slick (estável, fora da
+        // track) — assim o rebuild da track não remove o selo.
+        function stableTriggerAnchor(el) {
+            try {
+                const slick = el.closest && el.closest('.slick-slider, .slick-initialized, .slick-list, .slick-track');
+                if (slick && slick.parentElement) return slick.parentElement;
+                const inner = el.querySelector && el.querySelector('.slick-slider, .slick-initialized');
+                if (inner && inner.parentElement && inner.parentElement !== el) return inner.parentElement;
+            } catch (e) {}
+            return el;
+        }
+        function placeTriggerIn(el) {
+            const anchor = stableTriggerAnchor(el);
+            if (window.getComputedStyle(anchor).position === 'static') anchor.style.position = 'relative';
+            anchor.appendChild(openBtn);
+        }
         function tryPlaceTriggerBtn() {
             // 1ª prioridade: container que tenha <img> dentro (evita cair em slide de vídeo)
             for (const sel of imgContainers) {
                 const els = document.querySelectorAll(sel);
                 for (const el of els) {
-                    if (el.querySelector('img')) {
-                        if (window.getComputedStyle(el).position === 'static') el.style.position = 'relative';
-                        el.appendChild(openBtn);
-                        return true;
-                    }
+                    if (el.querySelector('img')) { placeTriggerIn(el); return true; }
                 }
             }
             // 2ª prioridade: qualquer container correspondente
             for (const sel of imgContainers) {
                 const el = document.querySelector(sel);
-                if (el) {
-                    if (window.getComputedStyle(el).position === 'static') el.style.position = 'relative';
-                    el.appendChild(openBtn);
-                    return true;
-                }
+                if (el) { placeTriggerIn(el); return true; }
             }
             return false;
         }
@@ -1051,7 +1061,11 @@
             // Ativação controlada: fora do produto permitido, garante que o botão NÃO exista
             // (em SPA nav o container troca e o watchdog reanexaria em qualquer produto).
             if (!isAllowedProduct()) { try { openBtn.remove(); } catch (_) {} return; }
-            if (!openBtn.isConnected) tryPlaceTriggerBtn();
+            // Re-ancora se saiu do DOM OU se o slick puxou o botão pra dentro da track/clone
+            // (nesse caso ele some visualmente na troca de foto/variante).
+            let drifted = false;
+            try { drifted = !!(openBtn.closest && openBtn.closest('.slick-track, .slick-list, .slick-cloned')); } catch (e) {}
+            if (!openBtn.isConnected || drifted) { try { openBtn.remove(); } catch (_) {} tryPlaceTriggerBtn(); }
         }
         let _trigPending = false;
         const triggerWatchdog = new MutationObserver(() => {
