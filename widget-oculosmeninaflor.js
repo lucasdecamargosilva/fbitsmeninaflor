@@ -252,10 +252,10 @@
 
         .q-provas-msg:empty { display: none; }
         .q-provas-msg {
-            font-size: 13px; margin-top: 10px; letter-spacing: 0.3px;
-            color: var(--c-ink); font-weight: 500;
-            background: var(--c-surface);
-            border: 1px solid var(--c-line);
+            font-size: 13px; margin: 2px 0 20px; letter-spacing: 0.3px;
+            color: var(--c-accent-dark); font-weight: 600;
+            background: rgba(255, 86, 255, 0.08);
+            border: 1px solid rgba(255, 86, 255, 0.35);
             border-radius: 6px;
             padding: 10px 14px;
             text-align: center;
@@ -1337,8 +1337,8 @@
                     var used = Math.max(d.phone_count || 0, d.ip_count || 0);
                     var rem = Math.max(0, limit - used);
                     el.classList.remove('is-warn');
-                    if (rem <= 0) { el.textContent = 'Você já usou suas ' + limit + ' provas grátis de hoje 💜'; el.classList.add('is-warn'); }
-                    else { el.textContent = '💜 Você tem ' + rem + (rem === 1 ? ' prova' : ' provas') + ' grátis hoje (de ' + limit + ')'; if (rem === 1) el.classList.add('is-warn'); }
+                    if (rem <= 0) { el.textContent = 'Você já usou suas ' + limit + ' provas grátis de hoje 🩷'; el.classList.add('is-warn'); }
+                    else { el.textContent = '🩷 Você tem ' + rem + (rem === 1 ? ' prova' : ' provas') + ' grátis hoje (de ' + limit + ')'; if (rem === 1) el.classList.add('is-warn'); }
                 })
                 .catch(function () {});
         }
