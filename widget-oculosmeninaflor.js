@@ -459,7 +459,7 @@
             font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
             color: var(--c-muted); font-family: var(--font-body);
         }
-        .q-loading-t2 img { height: 26px; width: auto; opacity: 0.7; }
+        .q-loading-t2 img { height: 24px !important; width: auto !important; max-height: 24px !important; max-width: 150px !important; opacity: 0.7; object-fit: contain; }
         .q-loading-bar { height: 3px; background: var(--c-line); width: 100%; position: relative; overflow: hidden; border-radius: 2px; }
         .q-loading-bar > div {
             position: absolute; top: 0; left: 0; height: 100%; width: 100%;
@@ -635,7 +635,7 @@
             flex-shrink: 0; border-top: 1px solid var(--c-line); text-decoration: none;
         }
         .q-powered-footer span { font-size: 9.5px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--c-muted); }
-        .q-quantic-logo { height: 20px; opacity: 0.7; }
+        .q-quantic-logo { height: 18px !important; width: auto !important; max-height: 18px !important; max-width: 130px !important; opacity: 0.7; object-fit: contain; }
     `;
 
 
