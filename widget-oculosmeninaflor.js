@@ -31,7 +31,6 @@
     // FBITS (fbitsstatic.net) libera CORS -> usa o gerador PRINCIPAL com imagem em binário (padrão).
     const WEBHOOK_PROVA = 'https://n8n.segredosdodrop.com/webhook/gerador-oculos';
     const WEBHOOK_CHECK_LIMIT = 'https://n8n.segredosdodrop.com/webhook/meninaflor-check-limit';
-    const MENINAFLOR_STORE_WHATSAPP = '5511940311719';
     const WEBHOOK_PIX = 'https://n8n.segredosdodrop.com/webhook/cacife-pix';
     const WEBHOOK_PIX_STATUS = 'https://n8n.segredosdodrop.com/webhook/cacife-pix-status';
     const SIZES_TOP = ['XXP', 'XP', 'P', 'M', 'G', 'XG', 'XXG', '3XG', '4XG', '5XG'];
@@ -1643,27 +1642,17 @@
         }
 
         async function createPixAndPoll() {
-            /* Limite atingido → tela de recuperação: manda pro WhatsApp da loja (lead quente)
-               em vez do "volte amanhã". Rastreia o clique no pl-provador-limit-wa-click. */
+            /* Limite atingido → tela "suas provas de hoje acabaram, volte amanhã" (sem WhatsApp). */
             try {
                 var _ph = document.getElementById('q-step-photo'); if (_ph) _ph.style.display = 'none';
                 var _lb = document.getElementById('q-loading-box'); if (_lb) _lb.style.display = 'none';
                 var _pix = document.getElementById('q-step-pix');
                 if (_pix) {
-                    var _prod = '';
-                    try { _prod = ((document.querySelector('h1.product-title,h1.product-detail-info-name,h1.product__title,.product-single__title') || {}).innerText || document.title || '').trim(); } catch (e) {}
-                    var _msg = 'Olá! Usei o provador virtual' + (_prod ? (' e me interessei pelo ' + _prod) : '') + '. Quero meu teste personalizado!';
-                    var _wa = 'https://wa.me/' + MENINAFLOR_STORE_WHATSAPP + '?text=' + encodeURIComponent(_msg);
                     _pix.style.display = 'flex';
                     _pix.innerHTML =
                         '<div style="width:72px;height:72px;border-radius:50%;background:rgba(255,86,255,0.10);border:1px solid rgba(255,86,255,0.35);display:flex;align-items:center;justify-content:center;margin:0 auto 4px;"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--c-accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="15" r="3.2"/><circle cx="18" cy="15" r="3.2"/><path d="M9.2 15c0-1.2 1.2-2 2.8-2s2.8.8 2.8 2"/><path d="M2.8 13.5 4.6 8.8a2 2 0 0 1 1.9-1.3h1.2"/><path d="M21.2 13.5 19.4 8.8a2 2 0 0 0-1.9-1.3h-1.2"/></svg></div>'
-                        + '<h2 style="text-align:center;">Seu provador virtual agora é com nossa consultora!</h2>'
-                        + '<p class="q-pix-subtitle" style="text-align:center;">Fale agora com nossa especialista e receba um teste personalizado com os modelos que mais valorizam seu rosto pelo WhatsApp!</p>'
-                        + '<a href="' + _wa + '" id="q-limit-wa-link" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;justify-content:center;gap:7px;background:#25D366;color:#fff;border-radius:10px;padding:12px 22px;font-family:inherit;font-weight:700;font-size:14px;text-decoration:none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.9c0 2.1.55 4.06 1.6 5.8L2 22l4.44-1.65a9.9 9.9 0 0 0 5.6 1.72h.01c5.46 0 9.9-4.45 9.9-9.9C21.95 6.45 17.5 2 12.04 2zm5.8 14.15c-.24.68-1.4 1.3-1.94 1.34-.5.05-1.13.07-1.82-.11-.42-.13-.96-.31-1.65-.61-2.9-1.25-4.8-4.17-4.94-4.36-.15-.19-1.18-1.57-1.18-2.99 0-1.42.75-2.12 1.01-2.41.27-.29.58-.36.77-.36l.55.01c.18.01.42-.07.66.5.24.59.83 2.04.9 2.18.07.15.12.32.02.51-.1.19-.15.31-.29.48-.15.17-.31.38-.44.51-.15.15-.3.31-.13.6.17.29.75 1.24 1.62 2.01 1.11.99 2.05 1.3 2.34 1.44.29.15.46.12.63-.07.17-.19.72-.84.91-1.13.19-.29.39-.24.66-.14.27.1 1.7.8 1.99.95.29.15.48.22.55.34.07.12.07.71-.17 1.39z"/></svg> Quero meu teste personalizado</a>';
-                    var _lnk = document.getElementById('q-limit-wa-link');
-                    if (_lnk) _lnk.addEventListener('click', function () {
-                        try { fetch('https://n8n.segredosdodrop.com/webhook/pl-provador-limit-wa-click', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: (document.getElementById('q-phone') || {}).value || '', origin: location.origin, produto: _prod, loja: 'meninaflor' }) }).catch(function () {}); } catch (e) {}
-                    });
+                        + '<h2 style="text-align:center;">Suas provas de hoje acabaram!</h2>'
+                        + '<p class="q-pix-subtitle" style="text-align:center;">Você já usou suas provas gratuitas de hoje. Volte amanhã para experimentar mais modelos! 🩷</p>';
                 }
             } catch (e) {}
             return;
