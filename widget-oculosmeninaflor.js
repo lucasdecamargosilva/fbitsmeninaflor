@@ -864,6 +864,9 @@
             var _td = (document.querySelector('h1.product-title,h1.product-detail-info-name,h1.product__title,.product-single__title') || {}).innerText || document.title || '';
             fetch('https://n8n.segredosdodrop.com/webhook/pl-provador-buy-click', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: _tp, origin: location.origin, produto: _td }) }).catch(function () {});
         } catch (e) {}
+        // Fecha o provador ANTES de acionar a compra da loja: o modal de seleção de lentes/
+        // carrinho da loja tem z-index menor que o provador (999999), senão abre "por trás".
+        try { var _pm = document.getElementById('q-modal-ia'); if (_pm) _pm.style.display = 'none'; unlockBodyScroll(); } catch (e) {}
         var src = getProductForm();
         if (src) {
             var clone = document.createElement('form');
@@ -886,9 +889,9 @@
             clone.submit();
             return;
         }
-        // Fallback: botão nativo da loja
+        // Fallback: botão nativo da loja — clica no frame seguinte, com o provador já fechado
         var sb = findStoreBuyBtn();
-        if (sb) { try { sb.click(); } catch (e) {} }
+        if (sb) { requestAnimationFrame(function () { try { sb.click(); } catch (e) {} }); }
     }
 
     // Escassez — número estável por produto (não muda a cada refresh)
