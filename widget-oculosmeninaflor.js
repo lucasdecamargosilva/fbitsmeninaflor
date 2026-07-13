@@ -269,10 +269,18 @@
         }
 
         /* ── Seletor de foto do produto (Clip-On: lente normal x solar) ── */
-        .q-photo-selector-group { margin: 2px 0 22px; }
-        .q-photo-selector { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+        .q-photo-selector-group { margin: 2px 0 22px; text-align: center; }
+        .q-photo-selector-wrap { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 10px; }
+        .q-photo-selector {
+            display: flex; gap: 10px; overflow-x: auto; scroll-behavior: smooth;
+            justify-content: center; padding: 4px 2px; max-width: 100%;
+            scrollbar-width: thin;
+        }
+        .q-photo-selector-wrap.has-overflow .q-photo-selector { justify-content: flex-start; }
+        .q-photo-selector::-webkit-scrollbar { height: 5px; }
+        .q-photo-selector::-webkit-scrollbar-thumb { background: rgba(255, 86, 255, 0.4); border-radius: 3px; }
         .q-photo-thumb {
-            width: 64px; height: 64px; padding: 0; border-radius: 8px;
+            width: 82px; height: 82px; padding: 0; border-radius: 8px;
             border: 2px solid var(--c-line, #e5e5e5); background: #fff;
             cursor: pointer; overflow: hidden; flex: 0 0 auto;
             transition: border-color 0.15s, box-shadow 0.15s;
@@ -283,6 +291,14 @@
             border-color: var(--c-accent);
             box-shadow: 0 0 0 2px rgba(255, 86, 255, 0.25);
         }
+        .q-photo-arrow {
+            flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%;
+            border: 1px solid var(--c-line, #e5e5e5); background: #fff; cursor: pointer;
+            display: none; align-items: center; justify-content: center;
+            font-size: 18px; line-height: 1; color: var(--c-accent-dark); padding: 0;
+        }
+        .q-photo-arrow:hover { border-color: var(--c-accent); }
+        .q-photo-selector-wrap.has-overflow .q-photo-arrow { display: flex; }
 
         .q-status-msg {
             display: none; font-size: 11px; color: var(--c-danger);
@@ -689,7 +705,11 @@
                         <!-- Seletor de foto do produto (Clip-On: lente normal x solar) -->
                         <div class="q-photo-selector-group" id="q-photo-selector-group" style="display:none;">
                             <span class="q-field-label">Qual modelo quer provar?</span>
-                            <div class="q-photo-selector" id="q-photo-selector"></div>
+                            <div class="q-photo-selector-wrap" id="q-photo-selector-wrap">
+                                <button type="button" class="q-photo-arrow" id="q-photo-arrow-left" aria-label="Fotos anteriores">&#8249;</button>
+                                <div class="q-photo-selector" id="q-photo-selector"></div>
+                                <button type="button" class="q-photo-arrow" id="q-photo-arrow-right" aria-label="Mais fotos">&#8250;</button>
+                            </div>
                         </div>
 
                         <!-- Photo section -->
@@ -1228,7 +1248,7 @@
             return url;
         }
 
-        function extractImages() {
+        function extractImages(limit) {
             const containersSelectors = '.product-image.product-principal, .product-zoom__images.product-principal, .product-image, .js-product-slide, .product-image-column, .js-swiper-product, [data-store^="product-image-"], .product__media-wrapper, .product-gallery__media, .product__media, .product-image-main, .product-media-container, [data-media-id], .product__media-item, .product-gallery, .product-single__media, .media-gallery, [data-component="product.gallery"], .swiper-slide:not(.swiper-slide-duplicate), .slider-wrapper';
             const possibleContainers = Array.from(document.querySelectorAll(containersSelectors));
             let imgEls = [];
@@ -1274,13 +1294,14 @@
                 const og = document.querySelector('meta[property="og:image"]')?.content;
                 if (og) uniqueImgs.push(upgradeImgUrl(og));
             }
-            return uniqueImgs.slice(0, 4);
+            return uniqueImgs.slice(0, limit || 4);
         }
 
         function populateImageSelector() {
-            const imgs = extractImages();
+            const imgs = extractImages(60); // TODAS as fotos no seletor (envio continua usando 4)
             const group = document.getElementById('q-photo-selector-group');
             const sel = document.getElementById('q-photo-selector');
+            const wrap = document.getElementById('q-photo-selector-wrap');
             _userPickedImg = false;
             selectedProductImgUrl = imgs[0] || '';
             if (!group || !sel) return;
@@ -1304,6 +1325,16 @@
                 sel.appendChild(t);
             });
             group.style.display = 'block';
+            // Setas de scroll lateral quando as fotos não cabem na largura
+            if (wrap) {
+                const arL = document.getElementById('q-photo-arrow-left');
+                const arR = document.getElementById('q-photo-arrow-right');
+                if (arL && !arL._wired) { arL._wired = 1; arL.addEventListener('click', function () { sel.scrollBy({ left: -184, behavior: 'smooth' }); }); }
+                if (arR && !arR._wired) { arR._wired = 1; arR.addEventListener('click', function () { sel.scrollBy({ left: 184, behavior: 'smooth' }); }); }
+                setTimeout(function () {
+                    wrap.classList.toggle('has-overflow', sel.clientWidth > 0 && sel.scrollWidth > sel.clientWidth + 4);
+                }, 80);
+            }
         }
 
         // -- Tracking de abertura do provador (session anonima) - Provou Levou --
