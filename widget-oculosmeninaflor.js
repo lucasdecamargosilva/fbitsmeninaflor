@@ -268,6 +268,22 @@
             font-weight: 600;
         }
 
+        /* ── Seletor de foto do produto (Clip-On: lente normal x solar) ── */
+        .q-photo-selector-group { margin: 2px 0 22px; }
+        .q-photo-selector { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+        .q-photo-thumb {
+            width: 64px; height: 64px; padding: 0; border-radius: 8px;
+            border: 2px solid var(--c-line, #e5e5e5); background: #fff;
+            cursor: pointer; overflow: hidden; flex: 0 0 auto;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .q-photo-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
+        .q-photo-thumb:hover { border-color: var(--c-accent); }
+        .q-photo-thumb.is-selected {
+            border-color: var(--c-accent);
+            box-shadow: 0 0 0 2px rgba(255, 86, 255, 0.25);
+        }
+
         .q-status-msg {
             display: none; font-size: 11px; color: var(--c-danger);
             font-weight: 500; margin-top: 6px; letter-spacing: 0.3px;
@@ -669,6 +685,12 @@
                             <div id="q-phone-error" class="q-status-msg">N&#250;mero inv&#225;lido</div>
                         </div>
                         <div class="q-provas-msg" id="q-provas-msg"></div>
+
+                        <!-- Seletor de foto do produto (Clip-On: lente normal x solar) -->
+                        <div class="q-photo-selector-group" id="q-photo-selector-group" style="display:none;">
+                            <span class="q-field-label">Qual modelo quer provar?</span>
+                            <div class="q-photo-selector" id="q-photo-selector"></div>
+                        </div>
 
                         <!-- Photo section -->
                         <p class="q-section-label">Envie sua foto</p>
@@ -1196,6 +1218,7 @@
         let userPhoto = null;
         let pixPaymentId = null;
         let selectedProductImgUrl = '';
+        let _userPickedImg = false;
 
         // Upgrade Nuvemshop CDN URLs to 1024px version
         function upgradeImgUrl(url) {
@@ -1257,8 +1280,30 @@
         function populateImageSelector() {
             const imgs = extractImages();
             const group = document.getElementById('q-photo-selector-group');
-            if (group) group.style.display = 'none';
+            const sel = document.getElementById('q-photo-selector');
+            _userPickedImg = false;
             selectedProductImgUrl = imgs[0] || '';
+            if (!group || !sel) return;
+            // Só mostra o seletor quando há 2+ fotos (ex.: Clip-On com lente normal e solar).
+            if (imgs.length < 2) { group.style.display = 'none'; sel.innerHTML = ''; return; }
+            sel.innerHTML = '';
+            imgs.forEach(function (url, i) {
+                const t = document.createElement('button');
+                t.type = 'button';
+                t.className = 'q-photo-thumb' + (i === 0 ? ' is-selected' : '');
+                t.setAttribute('aria-label', 'Provar este modelo');
+                const im = document.createElement('img');
+                im.src = url; im.alt = 'Modelo ' + (i + 1); im.loading = 'lazy';
+                t.appendChild(im);
+                t.addEventListener('click', function () {
+                    selectedProductImgUrl = url;
+                    _userPickedImg = true;
+                    sel.querySelectorAll('.q-photo-thumb').forEach(function (x) { x.classList.remove('is-selected'); });
+                    t.classList.add('is-selected');
+                });
+                sel.appendChild(t);
+            });
+            group.style.display = 'block';
         }
 
         // -- Tracking de abertura do provador (session anonima) - Provou Levou --
@@ -1811,6 +1856,9 @@
                             allProdImgs = _mix;
                         }
                     } catch (e) {}
+                    // Se o cliente ESCOLHEU uma foto no seletor (Clip-On: lente normal x solar),
+                    // envia SÓ ela — senão o gerador misturaria as lentes das outras fotos.
+                    if (_userPickedImg && selectedProductImgUrl) { allProdImgs = [selectedProductImgUrl]; }
                     allProdImgs = allProdImgs.slice(0, 4);
                     console.log('[PL Menina Flor] Enviando', allProdImgs.length, 'fotos do produto (binário)');
                     let _primaryDone = false, _slot = 1;
