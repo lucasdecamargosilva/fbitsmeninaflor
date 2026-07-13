@@ -268,38 +268,6 @@
             font-weight: 600;
         }
 
-        /* ── Seletor de foto do produto (Clip-On: lente normal x solar) ── */
-        .q-photo-selector-group { margin: 2px 0 22px; text-align: center; }
-        .q-photo-selector-wrap { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 10px; }
-        .q-photo-selector {
-            display: flex; gap: 10px; overflow-x: auto;
-            justify-content: center; padding: 4px 2px; max-width: 100%;
-            scrollbar-width: thin;
-        }
-        .q-photo-selector-wrap.has-overflow .q-photo-selector { justify-content: flex-start; }
-        .q-photo-selector::-webkit-scrollbar { height: 5px; }
-        .q-photo-selector::-webkit-scrollbar-thumb { background: rgba(255, 86, 255, 0.4); border-radius: 3px; }
-        .q-photo-thumb {
-            width: 82px; height: 82px; padding: 0; border-radius: 8px;
-            border: 2px solid var(--c-line, #e5e5e5); background: #fff;
-            cursor: pointer; overflow: hidden; flex: 0 0 auto;
-            transition: border-color 0.15s, box-shadow 0.15s;
-        }
-        .q-photo-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; }
-        .q-photo-thumb:hover { border-color: var(--c-accent); }
-        .q-photo-thumb.is-selected {
-            border-color: var(--c-accent);
-            box-shadow: 0 0 0 2px rgba(255, 86, 255, 0.25);
-        }
-        .q-photo-arrow {
-            flex: 0 0 auto; width: 30px; height: 30px; border-radius: 50%;
-            border: 1px solid var(--c-line, #e5e5e5); background: #fff; cursor: pointer;
-            display: none; align-items: center; justify-content: center;
-            font-size: 18px; line-height: 1; color: var(--c-accent-dark); padding: 0;
-        }
-        .q-photo-arrow:hover { border-color: var(--c-accent); }
-        .q-photo-selector-wrap.has-overflow .q-photo-arrow { display: flex; }
-
         .q-status-msg {
             display: none; font-size: 11px; color: var(--c-danger);
             font-weight: 500; margin-top: 6px; letter-spacing: 0.3px;
@@ -701,16 +669,6 @@
                             <div id="q-phone-error" class="q-status-msg">N&#250;mero inv&#225;lido</div>
                         </div>
                         <div class="q-provas-msg" id="q-provas-msg"></div>
-
-                        <!-- Seletor de foto do produto (Clip-On: lente normal x solar) -->
-                        <div class="q-photo-selector-group" id="q-photo-selector-group" style="display:none;">
-                            <span class="q-field-label">Qual modelo quer provar?</span>
-                            <div class="q-photo-selector-wrap" id="q-photo-selector-wrap">
-                                <button type="button" class="q-photo-arrow" id="q-photo-arrow-left" aria-label="Fotos anteriores">&#8249;</button>
-                                <div class="q-photo-selector" id="q-photo-selector"></div>
-                                <button type="button" class="q-photo-arrow" id="q-photo-arrow-right" aria-label="Mais fotos">&#8250;</button>
-                            </div>
-                        </div>
 
                         <!-- Photo section -->
                         <p class="q-section-label">Envie sua foto</p>
@@ -1238,7 +1196,6 @@
         let userPhoto = null;
         let pixPaymentId = null;
         let selectedProductImgUrl = '';
-        let _userPickedImg = false;
 
         // Upgrade Nuvemshop CDN URLs to 1024px version
         function upgradeImgUrl(url) {
@@ -1248,7 +1205,7 @@
             return url;
         }
 
-        function extractImages(limit) {
+        function extractImages() {
             const containersSelectors = '.product-image.product-principal, .product-zoom__images.product-principal, .product-image, .js-product-slide, .product-image-column, .js-swiper-product, [data-store^="product-image-"], .product__media-wrapper, .product-gallery__media, .product__media, .product-image-main, .product-media-container, [data-media-id], .product__media-item, .product-gallery, .product-single__media, .media-gallery, [data-component="product.gallery"], .swiper-slide:not(.swiper-slide-duplicate), .slider-wrapper';
             const possibleContainers = Array.from(document.querySelectorAll(containersSelectors));
             let imgEls = [];
@@ -1294,48 +1251,14 @@
                 const og = document.querySelector('meta[property="og:image"]')?.content;
                 if (og) uniqueImgs.push(upgradeImgUrl(og));
             }
-            return uniqueImgs.slice(0, limit || 4);
+            return uniqueImgs.slice(0, 4);
         }
 
         function populateImageSelector() {
-            const imgs = extractImages(60); // TODAS as fotos no seletor (envio continua usando 4)
+            const imgs = extractImages();
             const group = document.getElementById('q-photo-selector-group');
-            const sel = document.getElementById('q-photo-selector');
-            const wrap = document.getElementById('q-photo-selector-wrap');
-            _userPickedImg = false;
+            if (group) group.style.display = 'none';
             selectedProductImgUrl = imgs[0] || '';
-            if (!group || !sel) return;
-            // Só mostra o seletor quando há 2+ fotos (ex.: Clip-On com lente normal e solar).
-            if (imgs.length < 2) { group.style.display = 'none'; sel.innerHTML = ''; return; }
-            sel.innerHTML = '';
-            imgs.forEach(function (url, i) {
-                const t = document.createElement('button');
-                t.type = 'button';
-                t.className = 'q-photo-thumb' + (i === 0 ? ' is-selected' : '');
-                t.setAttribute('aria-label', 'Provar este modelo');
-                const im = document.createElement('img');
-                im.src = url; im.alt = 'Modelo ' + (i + 1); im.loading = 'lazy';
-                t.appendChild(im);
-                t.addEventListener('click', function () {
-                    selectedProductImgUrl = url;
-                    _userPickedImg = true;
-                    sel.querySelectorAll('.q-photo-thumb').forEach(function (x) { x.classList.remove('is-selected'); });
-                    t.classList.add('is-selected');
-                });
-                sel.appendChild(t);
-            });
-            group.style.display = 'block';
-            // Setas de scroll lateral quando as fotos não cabem na largura
-            if (wrap) {
-                const arL = document.getElementById('q-photo-arrow-left');
-                const arR = document.getElementById('q-photo-arrow-right');
-                // scroll instantâneo (behavior:'smooth' trava dentro de modal com ancestral transform — bug Chrome)
-                if (arL && !arL._wired) { arL._wired = 1; arL.addEventListener('click', function () { sel.scrollBy(-184, 0); }); }
-                if (arR && !arR._wired) { arR._wired = 1; arR.addEventListener('click', function () { sel.scrollBy(184, 0); }); }
-                setTimeout(function () {
-                    wrap.classList.toggle('has-overflow', sel.clientWidth > 0 && sel.scrollWidth > sel.clientWidth + 4);
-                }, 80);
-            }
         }
 
         // -- Tracking de abertura do provador (session anonima) - Provou Levou --
@@ -1888,9 +1811,6 @@
                             allProdImgs = _mix;
                         }
                     } catch (e) {}
-                    // Se o cliente ESCOLHEU uma foto no seletor (Clip-On: lente normal x solar),
-                    // envia SÓ ela — senão o gerador misturaria as lentes das outras fotos.
-                    if (_userPickedImg && selectedProductImgUrl) { allProdImgs = [selectedProductImgUrl]; }
                     allProdImgs = allProdImgs.slice(0, 4);
                     console.log('[PL Menina Flor] Enviando', allProdImgs.length, 'fotos do produto (binário)');
                     let _primaryDone = false, _slot = 1;
