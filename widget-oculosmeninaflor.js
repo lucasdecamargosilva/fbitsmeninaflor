@@ -272,7 +272,7 @@
         .q-photo-selector-group { margin: 2px 0 22px; text-align: center; }
         .q-photo-selector-wrap { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 10px; }
         .q-photo-selector {
-            display: flex; gap: 10px; overflow-x: auto; scroll-behavior: smooth;
+            display: flex; gap: 10px; overflow-x: auto;
             justify-content: center; padding: 4px 2px; max-width: 100%;
             scrollbar-width: thin;
         }
@@ -1329,8 +1329,9 @@
             if (wrap) {
                 const arL = document.getElementById('q-photo-arrow-left');
                 const arR = document.getElementById('q-photo-arrow-right');
-                if (arL && !arL._wired) { arL._wired = 1; arL.addEventListener('click', function () { sel.scrollBy({ left: -184, behavior: 'smooth' }); }); }
-                if (arR && !arR._wired) { arR._wired = 1; arR.addEventListener('click', function () { sel.scrollBy({ left: 184, behavior: 'smooth' }); }); }
+                // scroll instantâneo (behavior:'smooth' trava dentro de modal com ancestral transform — bug Chrome)
+                if (arL && !arL._wired) { arL._wired = 1; arL.addEventListener('click', function () { sel.scrollBy(-184, 0); }); }
+                if (arR && !arR._wired) { arR._wired = 1; arR.addEventListener('click', function () { sel.scrollBy(184, 0); }); }
                 setTimeout(function () {
                     wrap.classList.toggle('has-overflow', sel.clientWidth > 0 && sel.scrollWidth > sel.clientWidth + 4);
                 }, 80);
