@@ -795,24 +795,36 @@
     // a variante MARCADA ainda não é a página atual, o H1 está defasado e mandaria
     // o nome da cor errada (a "primeira variante"). Nesse caso usamos a variante
     // marcada (reconstruída do slug do SKU). Caso normal → mantém o H1 (formatado).
-    function plProductName() {
-        var h1 = (document.querySelector('h1.product-title,h1.product-detail-info-name,h1.product__title,.product-single__title') || {}).innerText || document.title || '';
+    // SKU-alvo p/ FBITS (Menina Flor): a variante MARCADA no seletor "COR" reflete a escolha
+    // do cliente na hora; o H1/og/URL só atualizam depois da navegação AJAX lenta. Fallback: og/URL.
+    function plTargetSku() {
         try {
             var checked = document.querySelector('input.attribute-select:checked');
             if (checked && checked.value) {
-                var slug = String(checked.value).trim()
-                    .replace(/^https?:\/\/[^/]+/, '')
-                    .replace(/[#?].*$/, '')
-                    .replace(/\/+$/, '');
-                var seg = (slug.split('/').filter(Boolean).pop()) || '';
-                if (seg) {
-                    var path = (location.pathname || '').replace(/\/+$/, '');
-                    // Variante marcada JÁ é a página atual → H1 confere, mantém.
-                    if (path.indexOf(seg) !== -1) return h1;
-                    // Senão, reconstrói o nome da variante marcada (sem o id numérico final).
-                    var name = seg.replace(/-\d+$/, '').replace(/-/g, ' ').trim();
-                    if (name) return name.toUpperCase();
-                }
+                var seg = String(checked.value).trim()
+                    .replace(/^https?:\/\/[^/]+/, '').replace(/[#?].*$/, '').replace(/\/+$/, '')
+                    .split('/').filter(Boolean).pop();
+                if (seg) return seg;
+            }
+        } catch (e) {}
+        var og = (document.querySelector('meta[property="og:image"]') || {}).content || '';
+        var m = og.match(/\/img\/p\/([^/]+)\//);
+        if (m) return m[1];
+        var p = (location.pathname || '').replace(/\/+$/, '').split('/').filter(Boolean).pop();
+        return p || '';
+    }
+
+    // Nome do produto robusto: se a variante MARCADA ainda não é a página atual (H1 defasado
+    // pela navegação AJAX lenta da FBITS), reconstrói o nome da variante marcada; senão o H1.
+    function plProductName() {
+        var h1 = (document.querySelector('h1.product-title,h1.product-detail-info-name,h1.product__title,.product-single__title') || {}).innerText || document.title || '';
+        try {
+            var target = plTargetSku();
+            if (target) {
+                var path = (location.pathname || '').replace(/\/+$/, '');
+                if (path.indexOf(target) !== -1) return h1;
+                var name = target.replace(/-\d+$/, '').replace(/-/g, ' ').trim();
+                if (name) return name.toUpperCase();
             }
         } catch (e) {}
         return h1;
@@ -1276,6 +1288,22 @@
                     uniqueImgs.push(src);
                 }
             });
+            // FBITS (Menina Flor): mantém só as imagens do SKU-alvo (variante marcada ou página
+            // atual) e descarta miniaturas de OUTRAS cores/modelos — senão o gerador recebia o
+            // modelo errado (ex.: swatch "preto" na página "rose"). og:image = foto principal do SKU.
+            try {
+                var _target = plTargetSku();
+                var _og = document.querySelector('meta[property="og:image"]')?.content || '';
+                var _ogFolder = (_og.match(/\/img\/p\/([^/]+)\//) || [])[1] || '';
+                var _pool = uniqueImgs.slice();
+                if (_ogFolder && _target && _ogFolder === _target) _pool.unshift(upgradeImgUrl(_og));
+                if (_target) {
+                    var _seen = {}, _out = [];
+                    _pool.filter(function (u) { return u.indexOf('/img/p/' + _target + '/') !== -1; })
+                        .forEach(function (u) { var k = u.split('?')[0]; if (!_seen[k]) { _seen[k] = 1; _out.push(u); } });
+                    if (_out.length) return _out.slice(0, 4);
+                }
+            } catch (e) {}
             if (uniqueImgs.length === 0) {
                 const og = document.querySelector('meta[property="og:image"]')?.content;
                 if (og) uniqueImgs.push(upgradeImgUrl(og));
