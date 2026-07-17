@@ -789,6 +789,35 @@
     // troque para '/comprar/' por '/carrinho' (1 linha) — é o único ponto a validar ao vivo.
     var Q_CHECKOUT_URL = '/comprar/';
 
+    // Nome do produto robusto p/ FBITS com seletor de variante (seção "COR").
+    // Na Menina Flor cada cor é um SKU separado; ao trocar a cor a FBITS marca o
+    // radio na hora, mas o H1/URL só atualizam depois (navegação AJAX lenta). Se
+    // a variante MARCADA ainda não é a página atual, o H1 está defasado e mandaria
+    // o nome da cor errada (a "primeira variante"). Nesse caso usamos a variante
+    // marcada (reconstruída do slug do SKU). Caso normal → mantém o H1 (formatado).
+    function plProductName() {
+        var h1 = (document.querySelector('h1.product-title,h1.product-detail-info-name,h1.product__title,.product-single__title') || {}).innerText || document.title || '';
+        try {
+            var checked = document.querySelector('input.attribute-select:checked');
+            if (checked && checked.value) {
+                var slug = String(checked.value).trim()
+                    .replace(/^https?:\/\/[^/]+/, '')
+                    .replace(/[#?].*$/, '')
+                    .replace(/\/+$/, '');
+                var seg = (slug.split('/').filter(Boolean).pop()) || '';
+                if (seg) {
+                    var path = (location.pathname || '').replace(/\/+$/, '');
+                    // Variante marcada JÁ é a página atual → H1 confere, mantém.
+                    if (path.indexOf(seg) !== -1) return h1;
+                    // Senão, reconstrói o nome da variante marcada (sem o id numérico final).
+                    var name = seg.replace(/-\d+$/, '').replace(/-/g, ' ').trim();
+                    if (name) return name.toUpperCase();
+                }
+            }
+        } catch (e) {}
+        return h1;
+    }
+
     function getMainPrice() {
         // 0-FBITS) preço final do produto: .product-price__after.single-price (data-price=109.9).
         //    O .single-price é só do produto principal (os "Veja também" usam .product-price__after sem single-price).
@@ -956,7 +985,7 @@
         if (!btn) return;
         // Nome + valor do produto acima do botão
         var price = getMainPrice();
-        var prodName = (document.querySelector('h1.product-title,h1.product-detail-info-name,h1.product__title,.product-single__title') || {}).innerText || document.title || '';
+        var prodName = plProductName();
         var info = document.getElementById('q-result-prodinfo');
         var nameEl = document.getElementById('q-result-prodname');
         var priceEl = document.getElementById('q-result-prodprice');
@@ -1112,7 +1141,7 @@
         inlineBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            const prodName = document.querySelector('h1.product-title,h1.product-detail-info-name,h1.product__title,.product-single__title')?.innerText || document.title;
+            const prodName = plProductName();
             applyProduct(detectProduct(prodName));
             populateImageSelector();
             openModal();
@@ -1393,7 +1422,7 @@
                 e.preventDefault();
                 e.stopPropagation();
             }
-            const prodName = document.querySelector('h1.product-title,h1.product-detail-info-name,h1.product__title,.product-single__title')?.innerText || document.title;
+            const prodName = plProductName();
             applyProduct(detectProduct(prodName));
             populateImageSelector();
             openModal();
@@ -1749,7 +1778,7 @@
                 }
 
                 const prodImg = selectedProductImgUrl || (document.querySelector('meta[property="og:image"]')?.content || '');
-                const prodName = document.querySelector('h1.product-title,h1.product-detail-info-name,h1.product__title,.product-single__title')?.innerText || document.title;
+                const prodName = plProductName();
 
                 uploadStep.style.display = 'none';
                 document.getElementById('q-loading-box').style.display = 'flex';
