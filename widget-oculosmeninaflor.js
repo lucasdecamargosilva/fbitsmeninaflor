@@ -150,13 +150,13 @@
         .q-btn-inline-provador {
             display: flex; align-items: center; justify-content: center; gap: 7px;
             width: 100%; padding: 13px 16px;
-            background: var(--c-accent); color: #fff;
+            background: #fff; color: var(--c-accent);
             border: 1.5px solid var(--c-accent); border-radius: 0;
             font-family: 'Work Sans', var(--font-body), sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
             cursor: pointer; transition: background 0.25s, color 0.25s;
-            margin: 16px 0 4px; box-sizing: border-box;
+            margin: 12px 0 4px; box-sizing: border-box;
         }
-        .q-btn-inline-provador:hover { background: var(--c-accent-dark); color: #fff; }
+        .q-btn-inline-provador:hover { background: var(--c-accent); color: #fff; }
         .q-btn-inline-provador svg { width: 14px; height: 14px; flex-shrink: 0; }
 
         /* ── Modal overlay ── */
@@ -1141,7 +1141,7 @@
 
         const modal = document.getElementById('q-modal-ia');
 
-        // ── Botão inline acima do botão de compra ──
+        // ── Botão inline abaixo do botão de compra (ação secundária) ──
         const inlineBtn = document.createElement('button');
         inlineBtn.className = 'q-btn-inline-provador';
         inlineBtn.type = 'button';
@@ -1175,7 +1175,7 @@
             openModal();
         });
 
-        // Posiciona acima do botão de compra
+        // Posiciona abaixo do botão de compra
         function tryPlaceInlineBtn() {
             const buyBtn = document.querySelector('button.product-buy:not(#product-buy-floating), button.product-buy, .js-addtocart, .btn-add-to-cart, [data-component="product.add-to-cart"]');
             if (buyBtn) {
@@ -1183,13 +1183,13 @@
                 // Na FBITS o "Comprar" fica numa linha grid/flex (ex: quantidade | comprar, o
                 // container .product-buttons é display:grid). Injetar o provador como IRMÃO vira
                 // uma célula extra que quebra o grid (empurra/espreme o botão de compra). Se o pai
-                // é grid/flex, colocamos o botão ANTES do container inteiro (linha própria acima).
+                // é grid/flex, colocamos o botão DEPOIS do container inteiro (linha própria abaixo).
                 let pd = '';
                 try { pd = parent ? getComputedStyle(parent).display : ''; } catch (_) {}
                 if ((pd === 'grid' || pd === 'inline-grid' || pd === 'flex' || pd === 'inline-flex') && parent.parentNode) {
-                    parent.parentNode.insertBefore(inlineBtn, parent);
+                    parent.parentNode.insertBefore(inlineBtn, parent.nextSibling);
                 } else {
-                    parent.insertBefore(inlineBtn, buyBtn);
+                    parent.insertBefore(inlineBtn, buyBtn.nextSibling);
                 }
                 return true;
             }
