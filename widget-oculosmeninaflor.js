@@ -1259,6 +1259,15 @@
             if (url.includes('mitiendanube.com') || url.includes('nuvemshop.com')) {
                 return url.replace(/-\d+-\d+\.webp/, '-1024-1024.webp');
             }
+            // FBITS: a og:image vem em ?w=256&h=256 (miniatura de 9KB). Como ela e' a
+            // "referencia principal" do gerador, o oculos saia sem detalhe/artificial.
+            // A MESMA foto existe em 1280x1600 — so trocar os parametros de tamanho.
+            if (url.includes('fbitsstatic.net')) {
+                if (/[?&]w=\d+/.test(url)) {
+                    return url.replace(/([?&])w=\d+/, '$1w=1280').replace(/([?&])h=\d+/, '$1h=1600');
+                }
+                return url + (url.indexOf('?') === -1 ? '?' : '&') + 'w=1280&h=1600';
+            }
             return url;
         }
 
