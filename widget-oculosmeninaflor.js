@@ -1316,6 +1316,21 @@
                 var _og = document.querySelector('meta[property="og:image"]')?.content || '';
                 var _ogFolder = (_og.match(/\/img\/p\/([^/]+)\//) || [])[1] || '';
                 var _pool = uniqueImgs.slice();
+                // FBITS: varre TODAS as <img> da pagina pelo SKU-alvo. Os seletores de
+                // container nao cobrem todos os temas (a Silvia usa .product-image__item, que
+                // NAO casa com .product-image) — sem isso a galeria do produto nao era achada
+                // e sobrava foto de OUTRO produto (carrossel de vitrine). Filtrar pelo SKU e'
+                // nativo da plataforma e imune a mudanca de CSS.
+                if (_target) {
+                    var _daPag = [];
+                    document.querySelectorAll('img').forEach(function (im) {
+                        var s = (im.dataset && im.dataset.src) || im.getAttribute('data-src') || im.src || '';
+                        if (s && !s.includes('data:image') && s.indexOf('/img/p/' + _target + '/') !== -1) _daPag.push(s);
+                    });
+                    _daPag.forEach(function (u) {
+                        if (!_pool.some(function (x) { return x.split('?')[0] === u.split('?')[0]; })) _pool.push(u);
+                    });
+                }
                 if (_ogFolder && _target && _ogFolder === _target) {
                     // A og:image da FBITS vem em ?w=256&h=256 e, NESSE tamanho, o CDN devolve
                     // OUTRA foto (verificado 31/07: 278748-3.jpg e' uma modelo em 256 e outra
@@ -1323,8 +1338,9 @@
                     // ofuscando a foto boa da galeria e o gerador recebia 256x256 (~9KB).
                     // Solucao: usar a versao do MESMO arquivo que a PROPRIA PAGINA serve.
                     var _ogPath = _og.split('?')[0];
-                    var _daPagina = uniqueImgs.filter(function (u) { return u.split('?')[0] === _ogPath; })[0];
-                    _pool.unshift(_daPagina || _og);
+                    var _daPagina = _pool.filter(function (u) { return u.split('?')[0] === _ogPath; })[0];
+                    // so usa a og crua se a pagina nao servir esse arquivo (senao volta a miniatura)
+                    if (_daPagina) _pool.unshift(_daPagina);
                 }
                 if (_target) {
                     var _seen = {}, _out = [];
