@@ -799,6 +799,19 @@
     // marcada (reconstruída do slug do SKU). Caso normal → mantém o H1 (formatado).
     // SKU-alvo p/ FBITS (Menina Flor): a variante MARCADA no seletor "COR" reflete a escolha
     // do cliente na hora; o H1/og/URL só atualizam depois da navegação AJAX lenta. Fallback: og/URL.
+    // Pastas /img/p/<slug>/ que realmente existem nas imagens da pagina.
+    function plSkuFolders() {
+        var out = {};
+        try {
+            document.querySelectorAll('img').forEach(function (im) {
+                var s = (im.dataset && im.dataset.src) || im.getAttribute('data-src') || im.src || '';
+                var m = s.match(/\/img\/p\/([^/]+)\//);
+                if (m) out[m[1]] = 1;
+            });
+        } catch (e) {}
+        return out;
+    }
+
     function plTargetSku() {
         try {
             var checked = document.querySelector('input.attribute-select:checked');
@@ -806,7 +819,11 @@
                 var seg = String(checked.value).trim()
                     .replace(/^https?:\/\/[^/]+/, '').replace(/[#?].*$/, '').replace(/\/+$/, '')
                     .split('/').filter(Boolean).pop();
-                if (seg) return seg;
+                // ⚠️ So aceita se for MESMO um SKU de produto da pagina. Em varios produtos
+                // esse input e' um seletor de COR e o value vem "preto"/"dourado" — o filtro
+                // virava /img/p/preto/ (nao casa nada), caia no fallback SEM filtro e entrava
+                // foto de OUTRO produto como referencia do gerador.
+                if (seg && plSkuFolders()[seg]) return seg;
             }
         } catch (e) {}
         var og = (document.querySelector('meta[property="og:image"]') || {}).content || '';
