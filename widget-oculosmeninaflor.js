@@ -1962,7 +1962,12 @@
                     return;
                 }
 
-                const prodImg = selectedProductImgUrl || (document.querySelector('meta[property="og:image"]')?.content || '');
+                // Referencia principal = a foto do produto que a PROPRIA PAGINA serve.
+                // Lida na hora do envio (a galeria carrega lazy; no open do modal ainda podia
+                // estar vazia, e ai caia na og:image, que na FBITS e' miniatura 256x256).
+                let prodImg = '';
+                try { prodImg = extractImages()[0] || ''; } catch (e) {}
+                if (!prodImg) prodImg = selectedProductImgUrl || '';
                 const prodName = plProductName();
 
                 uploadStep.style.display = 'none';
