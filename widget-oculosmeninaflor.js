@@ -1259,15 +1259,10 @@
             if (url.includes('mitiendanube.com') || url.includes('nuvemshop.com')) {
                 return url.replace(/-\d+-\d+\.webp/, '-1024-1024.webp');
             }
-            // FBITS: a og:image vem em ?w=256&h=256 (miniatura de 9KB). Como ela e' a
-            // "referencia principal" do gerador, o oculos saia sem detalhe/artificial.
-            // A MESMA foto existe em 1280x1600 — so trocar os parametros de tamanho.
-            if (url.includes('fbitsstatic.net')) {
-                if (/[?&]w=\d+/.test(url)) {
-                    return url.replace(/([?&])w=\d+/, '$1w=1280').replace(/([?&])h=\d+/, '$1h=1600');
-                }
-                return url + (url.indexOf('?') === -1 ? '?' : '&') + 'w=1280&h=1600';
-            }
+            // ⚠️ FBITS: NAO reescrever w/h. Testado em 31/07 — a MESMA URL retorna FOTOS
+            // DIFERENTES conforme o tamanho pedido (ex.: 278748-3.jpg em ?w=256&h=256 e' uma
+            // modelo, e em ?w=1280&h=1600 e' OUTRA). Ampliar por parametro trocaria a foto do
+            // produto. Na FBITS usamos apenas URLs que a propria pagina serve (ver plPickFbits).
             return url;
         }
 
@@ -1321,7 +1316,16 @@
                 var _og = document.querySelector('meta[property="og:image"]')?.content || '';
                 var _ogFolder = (_og.match(/\/img\/p\/([^/]+)\//) || [])[1] || '';
                 var _pool = uniqueImgs.slice();
-                if (_ogFolder && _target && _ogFolder === _target) _pool.unshift(upgradeImgUrl(_og));
+                if (_ogFolder && _target && _ogFolder === _target) {
+                    // A og:image da FBITS vem em ?w=256&h=256 e, NESSE tamanho, o CDN devolve
+                    // OUTRA foto (verificado 31/07: 278748-3.jpg e' uma modelo em 256 e outra
+                    // em 1280). Como a dedup abaixo usa o caminho sem query, a og acabava
+                    // ofuscando a foto boa da galeria e o gerador recebia 256x256 (~9KB).
+                    // Solucao: usar a versao do MESMO arquivo que a PROPRIA PAGINA serve.
+                    var _ogPath = _og.split('?')[0];
+                    var _daPagina = uniqueImgs.filter(function (u) { return u.split('?')[0] === _ogPath; })[0];
+                    _pool.unshift(_daPagina || _og);
+                }
                 if (_target) {
                     var _seen = {}, _out = [];
                     _pool.filter(function (u) { return u.indexOf('/img/p/' + _target + '/') !== -1; })
