@@ -1390,6 +1390,7 @@
         // Varre a galeria do produto (extractImages) e coleta as fotos com rosto. Fallback
         // seguro: se nada detectar ou der erro, mantém as fotos default — sem regressão.
         var faceDetectPromise = null, _faceUrls = [], _faceDet = null, _faceDetTried = false;
+        var _faceLenteScore = {}; // url -> quao transparente e' a lente (0..1); ver _plLenteScore
         async function getFaceDetector() {
             if (_faceDetTried) return _faceDet;
             _faceDetTried = true;
@@ -1401,7 +1402,11 @@
                 var fileset = await vision.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm');
                 var det = await vision.FaceDetector.createFromOptions(fileset, {
                     baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite' },
-                    runningMode: 'IMAGE'
+                    runningMode: 'IMAGE',
+                    // 0.7 em vez do default 0.5: no packshot de fundo branco os dois aros do
+                    // oculos viravam "rosto" (medido: 0.55 de confianca, contra 0.93+ nos rostos
+                    // de verdade) e o packshot era eleito foto principal.
+                    minDetectionConfidence: 0.7
                 });
                 _faceDet = { mp: det };
             } catch (e) { _faceDet = null; }
@@ -1416,13 +1421,137 @@
                 img.src = url;
             });
         }
-        async function _plImgHasFace(det, img) {
+        // Rosto + posicao: alem do "tem rosto?", devolve a caixa do rosto e os olhos, que
+        // sao o que permite medir a lente depois (_plLenteScore).
+        async function _plFaceInfo(det, img) {
             try {
-                if (det.native) { var f = await det.native.detect(img); return !!(f && f.length); }
-                if (det.mp) { var r = det.mp.detect(img); return !!(r && r.detections && r.detections.length); }
+                var W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+                if (det.native) {
+                    var f = await det.native.detect(img);
+                    if (!f || !f.length) return null;
+                    var d = f[0], b = d.boundingBox || {};
+                    var eyes = [];
+                    (d.landmarks || []).forEach(function (lm) {
+                        if (lm && lm.type === 'eye' && lm.locations && lm.locations[0]) eyes.push({ x: lm.locations[0].x, y: lm.locations[0].y });
+                    });
+                    return { x: b.x, y: b.y, w: b.width, h: b.height, eyes: eyes };
+                }
+                if (det.mp) {
+                    var r = det.mp.detect(img);
+                    if (!r || !r.detections || !r.detections.length) return null;
+                    var dd = r.detections[0], bb = dd.boundingBox || {}, kp = dd.keypoints || [];
+                    // BlazeFace: keypoints[0] e [1] sao os olhos, em coordenada normalizada (0-1).
+                    var eyes2 = [];
+                    [0, 1].forEach(function (i) { if (kp[i]) eyes2.push({ x: kp[i].x * W, y: kp[i].y * H }); });
+                    return { x: bb.originX, y: bb.originY, w: bb.width, h: bb.height, eyes: eyes2 };
+                }
             } catch (e) {}
-            return false;
+            return null;
         }
+
+        // ── Lente transparente x solar (medido na foto, sem depender de nome de arquivo) ──
+        // Na FBITS o arquivo e' so "<id>-<n>.jpg", entao nao da pra inferir pelo nome — a leitura
+        // e' visual, em cima do olho.
+        // NAO da pra usar "quanto a lente e' clara": medido nas fotos da loja, clip-on escuro com
+        // reflexo de janela marca 0.43 e lente transparente em foto de luz quente marca 0.42 — as
+        // faixas se cruzam. O que separa e' COR: atraves da lente transparente aparece a PELE da
+        // propria pessoa (mesma cromaticidade da testa); atras da lente escura tudo e' escuro,
+        // e reflexo de janela e' cinza/neutro, longe do tom de pele.
+        // Score = fracao do quadradinho do olho com a cor da pele DELA (por isso serve para
+        // qualquer tom de pele e qualquer luz). Canvas "sujo" por CORS ou medida impossivel -> -1.
+        // 0.40 = meio do vao medido em 15 fotos reais da loja (transparente 0.58-0.82,
+        // escura 0.00-0.23), em 4 produtos: clip-on, 3-em-1, grau e solar.
+        var PL_LENTE_CLARA_MIN = 0.40;
+        function _plClipRect(x, y, w, h, cw, ch) {
+            x = Math.max(0, Math.round(x)); y = Math.max(0, Math.round(y));
+            w = Math.round(w); h = Math.round(h);
+            if (x + w > cw) w = cw - x;
+            if (y + h > ch) h = ch - y;
+            if (w < 1 || h < 1) return null;
+            return { x: x, y: y, w: w, h: h };
+        }
+        // Cor media da regiao, em cromaticidade (proporcao de R e G no total) + luminancia.
+        function _plMediaCor(cx, x, y, w, h, cw, ch) {
+            var r = _plClipRect(x, y, w, h, cw, ch); if (!r) return null;
+            var d = cx.getImageData(r.x, r.y, r.w, r.h).data, sr = 0, sg = 0, sb = 0, n = 0;
+            for (var i = 0; i < d.length; i += 4) { sr += d[i]; sg += d[i + 1]; sb += d[i + 2]; n++; }
+            if (!n) return null;
+            var R = sr / n, G = sg / n, B = sb / n, s = R + G + B;
+            if (s < 30) return null; // regiao praticamente preta: nao serve de referencia
+            return { rn: R / s, gn: G / s, luma: 0.299 * R + 0.587 * G + 0.114 * B };
+        }
+        function _plPeleFrac(cx, x, y, w, h, cw, ch, ref) {
+            var r = _plClipRect(x, y, w, h, cw, ch); if (!r) return -1;
+            var d = cx.getImageData(r.x, r.y, r.w, r.h).data, k = 0, n = 0;
+            for (var i = 0; i < d.length; i += 4) {
+                var R = d[i], G = d[i + 1], B = d[i + 2], s = R + G + B;
+                n++;
+                if (s < 30) continue;
+                var luma = 0.299 * R + 0.587 * G + 0.114 * B;
+                if (luma < ref.luma * 0.45 || luma > ref.luma * 1.60) continue; // sombra da lente / estouro
+                if (Math.abs(R / s - ref.rn) > 0.045) continue;                  // tom da pele dela
+                if (Math.abs(G / s - ref.gn) > 0.045) continue;
+                k++;
+            }
+            return n ? k / n : -1;
+        }
+        function _plLenteScore(img, face) {
+            try {
+                if (!face || !(face.w > 0) || !(face.h > 0)) return -1;
+                var W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+                if (!W || !H) return -1;
+                var S = Math.min(1, 320 / Math.max(W, H)); // amostra reduzida: leitura barata
+                var cw = Math.max(1, Math.round(W * S)), ch = Math.max(1, Math.round(H * S));
+                var cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+                var cx = cv.getContext('2d', { willReadFrequently: true });
+                if (!cx) return -1;
+                cx.drawImage(img, 0, 0, cw, ch);
+                var fx = face.x * S, fy = face.y * S, fw = face.w * S, fh = face.h * S;
+                var yTopo, medir;
+                if (face.eyes && face.eyes.length) {
+                    // Amostra DENTRO do olho (quadrado em cima de cada landmark), nao na faixa
+                    // toda: aro claro e bochecha inflavam a conta e faziam oculos de sol de
+                    // armacao clara passar por lente transparente.
+                    var xs = face.eyes.map(function (p) { return p.x * S; });
+                    var ys = face.eyes.map(function (p) { return p.y * S; });
+                    var x1 = Math.min.apply(null, xs), x2 = Math.max.apply(null, xs);
+                    var span = Math.max(x2 - x1, fw * 0.18); // 1 olho so (perfil) -> escala pelo rosto
+                    var lado = Math.max(3, span * 0.40);
+                    yTopo = (ys.reduce(function (a, b) { return a + b; }, 0) / ys.length) - lado / 2;
+                    medir = function (ref) {
+                        var acc = [];
+                        face.eyes.forEach(function (p) {
+                            var f = _plPeleFrac(cx, p.x * S - lado / 2, p.y * S - lado / 2, lado, lado, cw, ch, ref);
+                            if (f >= 0) acc.push(f);
+                        });
+                        if (!acc.length) return -1;
+                        return acc.reduce(function (a, b) { return a + b; }, 0) / acc.length;
+                    };
+                } else {
+                    // Sem landmark: faixa dos olhos pela proporcao classica do rosto.
+                    var bH = Math.max(4, fh * 0.16);
+                    yTopo = fy + fh * 0.34;
+                    medir = function (ref) { return _plPeleFrac(cx, fx + fw * 0.12, yTopo, fw * 0.76, bH, cw, ch, ref); };
+                }
+                // Referencia de pele: testa; se nao der (franja, corte), tenta abaixo dos olhos.
+                var skH = Math.max(3, fh * 0.10);
+                var pele = _plMediaCor(cx, fx + fw * 0.25, yTopo - fh * 0.18 - skH, fw * 0.5, skH, cw, ch);
+                if (!pele) pele = _plMediaCor(cx, fx + fw * 0.2, yTopo + fh * 0.22, fw * 0.6, fh * 0.12, cw, ch);
+                if (!pele) return -1;
+                return medir(pele);
+            } catch (e) { return -1; }
+        }
+        // Melhor foto de lente transparente entre as fotos no rosto (null se nenhuma passa do
+        // minimo) — conservador de proposito: na duvida, cai no fluxo antigo.
+        function plFotoLenteTransparente() {
+            var best = null, bestSc = PL_LENTE_CLARA_MIN;
+            _faceUrls.forEach(function (u) {
+                var sc = _faceLenteScore[u];
+                if (typeof sc === 'number' && sc >= bestSc) { bestSc = sc; best = u; }
+            });
+            return best;
+        }
+
         async function _plDetectFaces(urls) {
             if (!urls || !urls.length) return _faceUrls;
             var det = await getFaceDetector();
@@ -1430,7 +1559,11 @@
             for (var i = 0; i < urls.length && _faceUrls.length < 4; i++) {
                 var img = await _plLoadCorsImg(urls[i]);
                 if (!img) continue;
-                if (await _plImgHasFace(det, img)) _faceUrls.push(urls[i]);
+                var face = await _plFaceInfo(det, img);
+                if (!face) continue;
+                _faceUrls.push(urls[i]);
+                var sc = _plLenteScore(img, face); // img ainda carregada: mede aqui, sem 2o download
+                if (sc >= 0) _faceLenteScore[urls[i]] = sc;
             }
             return _faceUrls;
         }
@@ -2043,46 +2176,58 @@
                             }
                         }
                     } catch (_) {}
-                    // Detecção de rosto: manda 1 foto no rosto como PRINCIPAL (o gerador usa pra
-                    // calibrar a proporção/tamanho do óculos) + as fotos de fundo branco (packshot),
-                    // que mostram os detalhes da armação. Assim garante proporção E detalhe.
-                    // Sem rosto detectado → mantém as fotos default (fallback, sem regressão).
+                    // Guardado ANTES das regras abaixo: se a foto escolhida não baixar na hora do
+                    // envio, ainda dá pra mandar as outras em vez de ir sem product_image.
+                    const _reservaImgs = allProdImgs.slice();
+                    // REGRA 1 — rosto: se a galeria tem foto do óculos NO ROSTO, o gerador recebe
+                    // SÓ essas (packshot de fundo branco fica de fora; ele não ajuda a calibrar
+                    // proporção/posição no rosto).
+                    // REGRA 2 — lente transparente: entre as fotos no rosto, se alguma for de
+                    // lente transparente, manda SÓ ela. Sem isso, num clip-on a referência podia
+                    // ser a foto da lente solar e a prova saía com lente escura.
+                    // Sem rosto detectado (ou lente indefinida) → mantém o fluxo anterior
+                    // (fallback, sem regressão).
                     try {
                         if (faceDetectPromise) { await Promise.race([faceDetectPromise, new Promise(function (r) { setTimeout(r, 4000); })]); }
                         if (_faceUrls && _faceUrls.length) {
-                            var _key = function (u) { return String(u || '').split('?')[0]; };
-                            var _faceKeys = {};
-                            _faceUrls.forEach(function (u) { _faceKeys[_key(u)] = 1; });
-                            var _packshots = allProdImgs.filter(function (u) { return !_faceKeys[_key(u)]; });
-                            var _mix = [];
-                            var _add = function (u) { if (u && !_mix.some(function (x) { return _key(x) === _key(u); })) _mix.push(u); };
-                            _add(_faceUrls[0]);
-                            _packshots.forEach(_add);
-                            _faceUrls.slice(1).forEach(_add);
-                            allProdImgs.forEach(_add);
-                            allProdImgs = _mix;
+                            var _clara = plFotoLenteTransparente();
+                            allProdImgs = _clara ? [_clara] : _faceUrls.slice();
+                            console.log('[PL Menina Flor] fotos no rosto:', _faceUrls.length, '| lente transparente:', _clara ? 'sim (envia so ela)' : 'nao identificada');
                         }
                     } catch (e) {}
                     allProdImgs = allProdImgs.slice(0, 4);
                     console.log('[PL Menina Flor] Enviando', allProdImgs.length, 'fotos do produto (binário)');
                     let _primaryDone = false, _slot = 1;
-                    for (let _pi = 0; _pi < allProdImgs.length; _pi++) {
-                        try {
-                            const _b = await fetch(allProdImgs[_pi]).then(r => r.blob());
-                            if (!_b || !/^image\//i.test(_b.type)) continue; // pula HTML/nao-imagem -> evita 400 do gerador (ALTA DEMANDA)
-                            if (!_primaryDone) {
-                                fd.append('product_image', _b, 'product.jpg'); _primaryDone = true;
-                            } else {
-                                _slot++;
-                                const _b64 = await new Promise((resolve, reject) => {
-                                    const _r = new FileReader();
-                                    _r.onloadend = () => resolve(_r.result.split(',')[1]);
-                                    _r.onerror = reject;
-                                    _r.readAsDataURL(_b);
-                                });
-                                fd.append('product_image_' + _slot + '_b64', _b64);
-                            }
-                        } catch (_) {}
+                    const _enviarFotos = async (lista) => {
+                        for (let _pi = 0; _pi < lista.length; _pi++) {
+                            try {
+                                const _b = await fetch(lista[_pi]).then(r => r.blob());
+                                if (!_b || !/^image\//i.test(_b.type)) continue; // pula HTML/nao-imagem -> evita 400 do gerador (ALTA DEMANDA)
+                                if (!_primaryDone) {
+                                    fd.append('product_image', _b, 'product.jpg'); _primaryDone = true;
+                                } else {
+                                    _slot++;
+                                    const _b64 = await new Promise((resolve, reject) => {
+                                        const _r = new FileReader();
+                                        _r.onloadend = () => resolve(_r.result.split(',')[1]);
+                                        _r.onerror = reject;
+                                        _r.readAsDataURL(_b);
+                                    });
+                                    fd.append('product_image_' + _slot + '_b64', _b64);
+                                }
+                            } catch (_) {}
+                        }
+                    };
+                    await _enviarFotos(allProdImgs);
+                    // Nenhuma das escolhidas baixou: em vez de ir sem product_image (gerador
+                    // responde ALTA DEMANDA), cai nas outras fotos do produto.
+                    if (!_primaryDone) {
+                        const _k = u => String(u || '').split('?')[0];
+                        const _resto = _reservaImgs.filter(u => !allProdImgs.some(x => _k(x) === _k(u)));
+                        if (_resto.length) {
+                            console.log('[PL Menina Flor] foto escolhida nao baixou; usando reserva');
+                            await _enviarFotos(_resto.slice(0, 4));
+                        }
                     }
 
                     calculateFinalSize();
