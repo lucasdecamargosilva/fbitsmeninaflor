@@ -2043,10 +2043,18 @@
                             }
                         }
                     } catch (_) {}
-                    // Detecção de rosto: manda 1 foto no rosto como PRINCIPAL (o gerador usa pra
+                    // Detecção de rosto: manda as fotos no rosto PRIMEIRO (o gerador usa pra
                     // calibrar a proporção/tamanho do óculos) + as fotos de fundo branco (packshot),
                     // que mostram os detalhes da armação. Assim garante proporção E detalhe.
                     // Sem rosto detectado → mantém as fotos default (fallback, sem regressão).
+                    //
+                    // ⚠️ Antes ia só _faceUrls[0] na frente e TODOS os packshots em seguida; com o
+                    // corte em 4, as demais fotos no rosto nunca entravam. No Jasmine isso mandava
+                    // só a foto de lifestyle com a lente ESPELHADA e deixava de fora a foto no rosto
+                    // com a lente limpa (ficava na posição 11) — a IA nunca via como a lente deve
+                    // ser e inventava uma lente leitosa. Agora vão até 3 fotos no rosto, então o
+                    // prompt tem uma referência VISUAL de lente transparente pra apontar.
+                    var _TETO = 6;   // o gerador lê até 20; 4 era teto do widget e apertava demais
                     try {
                         if (faceDetectPromise) { await Promise.race([faceDetectPromise, new Promise(function (r) { setTimeout(r, 4000); })]); }
                         if (_faceUrls && _faceUrls.length) {
@@ -2056,14 +2064,14 @@
                             var _packshots = allProdImgs.filter(function (u) { return !_faceKeys[_key(u)]; });
                             var _mix = [];
                             var _add = function (u) { if (u && !_mix.some(function (x) { return _key(x) === _key(u); })) _mix.push(u); };
-                            _add(_faceUrls[0]);
-                            _packshots.forEach(_add);
-                            _faceUrls.slice(1).forEach(_add);
+                            _faceUrls.slice(0, 3).forEach(_add);   // até 3 no rosto (sol, transparente, etc.)
+                            _packshots.forEach(_add);              // completa com o detalhe da armação
+                            _faceUrls.slice(3).forEach(_add);
                             allProdImgs.forEach(_add);
                             allProdImgs = _mix;
                         }
                     } catch (e) {}
-                    allProdImgs = allProdImgs.slice(0, 4);
+                    allProdImgs = allProdImgs.slice(0, _TETO);
                     console.log('[PL Menina Flor] Enviando', allProdImgs.length, 'fotos do produto (binário)');
                     let _primaryDone = false, _slot = 1;
                     for (let _pi = 0; _pi < allProdImgs.length; _pi++) {
