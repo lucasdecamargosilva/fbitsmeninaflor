@@ -1427,7 +1427,9 @@
             if (!urls || !urls.length) return _faceUrls;
             var det = await getFaceDetector();
             if (!det) return _faceUrls;
-            for (var i = 0; i < urls.length && _faceUrls.length < 4; i++) {
+            // Teto 6 (era 4) e igual ao de envio: como agora só as fotos no rosto vão pro
+            // gerador, parar em 4 podia descartar justamente a de lente transparente.
+            for (var i = 0; i < urls.length && _faceUrls.length < 6; i++) {
                 var img = await _plLoadCorsImg(urls[i]);
                 if (!img) continue;
                 if (await _plImgHasFace(det, img)) _faceUrls.push(urls[i]);
@@ -2055,7 +2057,9 @@
                     // só a foto de lifestyle com a lente ESPELHADA e deixava de fora a foto no rosto
                     // com a lente limpa (ficava na posição 11) — a IA nunca via como a lente deve
                     // ser e inventava uma lente leitosa.
-                    var _TETO = 6;   // o gerador lê até 20; 4 era teto do widget e apertava demais
+                    // Com foto no rosto vão até 6 (o gerador lê até 20; o 4 era teto só do widget).
+                    // SEM rosto, mantém o 4 de sempre — o fallback não muda de comportamento.
+                    var _TETO = 4;
                     try {
                         if (faceDetectPromise) { await Promise.race([faceDetectPromise, new Promise(function (r) { setTimeout(r, 4000); })]); }
                         if (_faceUrls && _faceUrls.length) {
@@ -2064,6 +2068,7 @@
                             var _add = function (u) { if (u && !_mix.some(function (x) { return _key(x) === _key(u); })) _mix.push(u); };
                             _faceUrls.forEach(_add);   // só as fotos no rosto (sol, transparente, etc.)
                             allProdImgs = _mix;
+                            _TETO = 6;
                         }
                     } catch (e) {}
                     allProdImgs = allProdImgs.slice(0, _TETO);
