@@ -676,7 +676,7 @@
                         <!-- Photo section -->
                         <p class="q-section-label">Envie sua foto</p>
                         <div class="q-tip-box">
-                            <i class="ph ph-lightbulb"></i>
+                            <svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M176 232a8 8 0 0 1-8 8H88a8 8 0 0 1 0-16h80a8 8 0 0 1 8 8Zm40-128a87.6 87.6 0 0 1-33.6 69.2A16.2 16.2 0 0 0 176 186v6a16 16 0 0 1-16 16H96a16 16 0 0 1-16-16v-6a16 16 0 0 0-6.2-12.6A87.6 87.6 0 0 1 40 104.5C39.7 56.6 78.5 16.4 126.4 16A88 88 0 0 1 216 104Z"/></svg>
                             <span>Use uma foto n&#237;tida, de frente, com boa ilumina&#231;&#227;o.</span>
                         </div>
 
@@ -688,17 +688,17 @@
                             <div class="q-face-corner q-face-corner-br"></div>
                             <img id="q-pre-img" alt="Sua foto">
                             <div class="q-face-placeholder" id="q-face-placeholder">
-                                <i class="ph ph-user-circle" style="font-size:80px;color:#d4d4d4;"></i>
+                                <svg viewBox="0 0 256 256" width="80" height="80" fill="#d4d4d4" aria-hidden="true"><path d="M128 24a104 104 0 1 0 104 104A104.1 104.1 0 0 0 128 24Zm0 48a32 32 0 1 1-32 32 32 32 0 0 1 32-32Zm0 144a87.6 87.6 0 0 1-56.6-20.7 8 8 0 0 1-2.4-8.8 72 72 0 0 1 118 0 8 8 0 0 1-2.4 8.8A87.6 87.6 0 0 1 128 216Z"/></svg>
                             </div>
                         </div>
 
                         <!-- Upload buttons -->
                         <div class="q-upload-btns">
                             <button class="q-upload-btn" id="q-btn-camera">
-                                <i class="ph ph-camera"></i> Tirar foto
+                                <svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M208 56h-27.7l-13.8-20.7A8 8 0 0 0 160 32H96a8 8 0 0 0-6.5 3.3L75.7 56H48a24 24 0 0 0-24 24v112a24 24 0 0 0 24 24h160a24 24 0 0 0 24-24V80a24 24 0 0 0-24-24Zm-80 128a44 44 0 1 1 44-44 44 44 0 0 1-44 44Z"/></svg> Tirar foto
                             </button>
                             <button class="q-upload-btn" id="q-btn-gallery">
-                                <i class="ph ph-image"></i> Da galeria
+                                <svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M216 40H40a16 16 0 0 0-16 16v144a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V56a16 16 0 0 0-16-16Zm0 16v102.7l-26.3-26.4a16 16 0 0 0-22.6 0L154 145.4l-37.7-37.7a16 16 0 0 0-22.6 0L40 161.4V56ZM76 92a16 16 0 1 1 16 16 16 16 0 0 1-16-16Z"/></svg> Da galeria
                             </button>
                             <input type="file" id="q-camera-input" accept="image/*" capture="user" style="display:none">
                             <input type="file" id="q-gallery-input" accept="image/*" style="display:none">
