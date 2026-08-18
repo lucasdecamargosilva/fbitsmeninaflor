@@ -644,7 +644,7 @@
 
 
     // ─── IMAGEM DO BOTÃO (trigger) ─────────────────────────────────────────────
-    const stampImageHTML = `<img src="https://cdn.shopify.com/s/files/1/0636/6334/1746/files/logo_provador.png?v=1772494793" alt="Provador Virtual" style="width:100%;height:100%;object-fit:contain;">`;
+    const stampImageHTML = `<img src="https://lucasdecamargosilva.github.io/fbitsmeninaflor/img/selo-provador.png" alt="Provador Virtual" style="width:100%;height:100%;object-fit:contain;">`;
 
 
 
@@ -733,7 +733,7 @@
                             <div class="q-loading-t1">Gerando sua prova...</div>
                             <a href="https://provoulevou.com.br" target="_blank" class="q-loading-t2">
                                 <span>Powered by</span>
-                                <img src="https://i.ibb.co/MD3B4FQf/Logo-provou-preto-1.png" alt="Provou Levou">
+                                <img src="https://lucasdecamargosilva.github.io/fbitsmeninaflor/img/logo-provou-levou.png" alt="Provou Levou">
                             </a>
                         </div>
                         <div class="q-loading-bar"><div></div></div>
@@ -751,11 +751,11 @@
                                 <div class="q-result-prodname" id="q-result-prodname"></div>
                                 <div class="q-result-prodprice" id="q-result-prodprice"></div>
                                 <div class="q-result-installment" id="q-result-installment"></div>
-                                <div class="q-scarcity" id="q-scarcity" style="display:none;"><i class="ph-bold ph-fire"></i> APENAS <strong id="q-scarcity-n"></strong>&nbsp;UNIDADES RESTANTES</div>
+                                <div class="q-scarcity" id="q-scarcity" style="display:none;"><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true" style="vertical-align:-0.15em"><path d="M173.8 32.4a8 8 0 0 0-12.6 4.2c-5.4 24.9-19.9 44.6-32.7 58.2a136 136 0 0 1-10.6 9.9 79.9 79.9 0 0 0-25.5-32 8 8 0 0 0-12.6 4.9c-3.4 20.6-13.6 35.9-22.6 49.4C47.5 141.9 40 153.2 40 168a88 88 0 0 0 176 0c0-56.6-27.7-108-42.2-135.6Z"/></svg> APENAS <strong id="q-scarcity-n"></strong>&nbsp;UNIDADES RESTANTES</div>
                             </div>
                             <div class="q-seals" id="q-seals" style="display:none;">
-                                <div class="q-seal"><i class="ph-fill ph-shield-check"></i><span>Compra<br>Segura</span></div>
-                                <div class="q-seal"><i class="ph-fill ph-lock-key"></i><span>Pagamento<br>Seguro</span></div>
+                                <div class="q-seal"><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M208 40H48a16 16 0 0 0-16 16v56c0 75.8 63.8 100.9 76.6 105.2a15.7 15.7 0 0 0 10.8 0C132.2 212.9 196 187.8 196 112h12V56a16 16 0 0 0 0-16Zm-30.3 70-56 56a8 8 0 0 1-11.4 0l-24-24a8 8 0 0 1 11.4-11.4L116 149.3l50.3-50.4a8 8 0 0 1 11.4 11.4Z"/></svg><span>Compra<br>Segura</span></div>
+                                <div class="q-seal"><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M208 80h-32V56a48 48 0 0 0-96 0v24H48a16 16 0 0 0-16 16v112a16 16 0 0 0 16 16h160a16 16 0 0 0 16-16V96a16 16 0 0 0-16-16ZM96 56a32 32 0 0 1 64 0v24H96Zm40 132.9V200a8 8 0 0 1-16 0v-11.1a20 20 0 1 1 16 0Z"/></svg><span>Pagamento<br>Seguro</span></div>
                             </div>
                             <button class="q-btn-buy-now" id="q-btn-buy-now" style="display:none;">Comprar Agora</button>
                             <div id="q-related-products" style="display:none;">
@@ -776,7 +776,7 @@
                 </div>
                 <a href="https://provoulevou.com.br" target="_blank" class="q-powered-footer">
                     <span>Powered by</span>
-                    <img src="https://i.ibb.co/MD3B4FQf/Logo-provou-preto-1.png" class="q-quantic-logo" alt="Provou Levou">
+                    <img src="https://lucasdecamargosilva.github.io/fbitsmeninaflor/img/logo-provou-levou.png" class="q-quantic-logo" alt="Provou Levou">
                 </a>
             </div>
         </div>
@@ -973,7 +973,7 @@
         if (!el || !step || step.style.display === 'none') return;
         var nm = Q_FAKE_NAMES[Math.floor(Math.random() * Q_FAKE_NAMES.length)];
         var wh = Q_FAKE_WHEN[Math.floor(Math.random() * Q_FAKE_WHEN.length)];
-        el.innerHTML = '<i class="ph-fill ph-shopping-bag"></i><div><span style="font-size:12.5px;color:var(--c-ink);"><strong>' + nm + '</strong> comprou este produto</span><span>' + wh + ' &middot; compra verificada</span></div>';
+        el.innerHTML = '<svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M216 64h-40a48 48 0 0 0-96 0H40a16 16 0 0 0-16 16v120a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V80a16 16 0 0 0-16-16ZM128 32a32 32 0 0 1 32 32H96a32 32 0 0 1 32-32Zm88 168H40V80h40v24a8 8 0 0 0 16 0V80h64v24a8 8 0 0 0 16 0V80h40Z"/></svg><div><span style="font-size:12.5px;color:var(--c-ink);"><strong>' + nm + '</strong> comprou este produto</span><span>' + wh + ' &middot; compra verificada</span></div>';
         el.classList.add('show');
         clearTimeout(el._hideT);
         el._hideT = setTimeout(function () { el.classList.remove('show'); }, 4500);
@@ -1470,13 +1470,8 @@
         function openModal() {
             try { startFaceDetect(); } catch (e) {}
             plTrackOpen();
-            // Lazy-load Phosphor Icons na primeira abertura
-            if (!window.phosphorIconsLoaded) {
-                var ph = document.createElement('script');
-                ph.src = 'https://unpkg.com/@phosphor-icons/web';
-                document.head.appendChild(ph);
-                window.phosphorIconsLoaded = true;
-            }
+            // Sem Phosphor Icons: a CSP da loja bloqueia unpkg.com e a lib inteira servia
+            // para 3 iconezinhos — agora sao SVG inline, sem dependencia externa.
             modal.style.display = 'flex';
             lockBodyScroll();
             // Mostra contador imediatamente (só por IP) ao abrir o modal
