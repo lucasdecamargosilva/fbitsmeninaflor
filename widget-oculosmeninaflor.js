@@ -1,5 +1,2273 @@
-// Provador PAUSADO para a Menina Flor (18/08/2026, a pedido do lojista).
-// Arquivo neutralizado de proposito: nao renderiza nada na loja.
-// O codigo original esta preservado no historico do git — para religar,
-// restaure o commit 5eca1ec5aeeffffefa52cd9f7f1cd3bff8ddccc6 e republique no Pages.
-(function () { /* provador pausado */ })();
+(function () {
+    // Guarda global — evita duplicação se GTM/scripts injetarem 2x
+    if (window.__PL_MENINAFLOR_LOADED__) {
+        console.log('[PL Menina Flor] script já carregado, abortando 2ª execução');
+        return;
+    }
+    window.__PL_MENINAFLOR_LOADED__ = true;
+
+    function isValidBRPhone(nums) {
+        function setErr(msg) {
+            var el = document.getElementById('q-phone-error');
+            if (el) el.textContent = msg;
+        }
+        if (nums.length < 10) { setErr('N\u00famero incompleto — informe DDD + n\u00famero'); return false; }
+        if (nums.length > 11) { setErr('N\u00famero longo demais'); return false; }
+        if (!/^[1-9][1-9]/.test(nums)) { setErr('DDD inv\u00e1lido'); return false; }
+        if (nums.length === 11 && nums[2] !== '9') { setErr('Celular deve come\u00e7ar com 9 ap\u00f3s o DDD'); return false; }
+        var local = nums.length === 11 ? nums.slice(3) : nums.slice(2);
+        if (/^(\d)\1+$/.test(local)) { setErr('N\u00famero n\u00e3o parece real — confira'); return false; }
+        if (/(\d)\1{5,}/.test(local)) { setErr('N\u00famero n\u00e3o parece real — confira'); return false; }
+        // so 1-2 digitos distintos = fake (99996666, 54545454, 56565656)
+        if (new Set(local).size <= 2) { setErr('N\u00famero n\u00e3o parece real — confira'); return false; }
+        if (/^(?:01234567|12345678|23456789|34567890|98765432|87654321|76543210|0123456789|1234567890)/.test(local)) { setErr('N\u00famero n\u00e3o parece real — confira'); return false; }
+        return true;
+    }
+
+    // ===============================================
+    // 0. CHUMBAR A API KEY AQUI DIRETO NO CÓDIGO
+    // ===============================================
+    const apiKey = "0563a14127ed6abe45c6266398031ba8c977fefe000695ec708b8f4cc5342827";
+    window.PROVOU_LEVOU_API_KEY = apiKey;
+
+    // FBITS (fbitsstatic.net) libera CORS -> usa o gerador PRINCIPAL com imagem em binário (padrão).
+    const WEBHOOK_PROVA = 'https://n8n.segredosdodrop.com/webhook/gerador-oculos';
+    const WEBHOOK_CHECK_LIMIT = 'https://n8n.segredosdodrop.com/webhook/meninaflor-check-limit';
+    const WEBHOOK_PIX = 'https://n8n.segredosdodrop.com/webhook/cacife-pix';
+    const WEBHOOK_PIX_STATUS = 'https://n8n.segredosdodrop.com/webhook/cacife-pix-status';
+    const SIZES_TOP = ['XXP', 'XP', 'P', 'M', 'G', 'XG', 'XXG', '3XG', '4XG', '5XG'];
+    const SIZES_BOTTOM = ['36/XXP', '38/XP', '40/P', '42/M', '44/G', '46/XG', '48/XXG', '50/3XG', '52/4XG', '54/5XG'];
+    const SIZES_BOTTOM_SW = ['XXP', 'XP', 'P', 'M', 'G', 'XG', 'XXG', '3XG', '4XG', '5XG'];
+
+
+    const GRADE = {
+        regular: [49, 51, 54, 57, 61, 62, 64, 66, 70, 73],
+        oversized: [58, 60, 62, 64, 66, 70, 73, 76, 79, 83],
+        oversizedSS: [58, 61, 63, 67, 70, 74, 78, 82, 87, 92],
+        hoodie: [50, 53, 55, 58, 62, 65, 69, 74, 79, 83],
+        boxyHoodie: [61, 77, 78, 79, 80, 81, 82, 83, 84, 85],
+        puffer: [53, 56, 59, 61, 70, 74, 78, 82, 86, 90],
+        vest: [52, 55, 57, 59, 63, 66, 70, 72, 76, 82],
+        boxyHenley: [54, 56, 58, 64, 66, 68, 70, 76, 78, 84],
+        bottomTailoring: [36, 38, 40, 42, 44, 46, 48, 50, 52, 54],
+        bottomSweat: [36, 38, 40, 42, 44, 46, 48, 50, 52, 54],
+        underwear: [36, 38, 40, 42, 44, 46, 48, 50, 52, 54],
+        quadrilTailoring: [48, 50, 52, 56, 58, 60, 62, 64, 66, 68],
+        quadrilSweat: [48, 50, 52, 54, 56, 58, 60, 62, 64, 66],
+        quadrilUnderwear: [50, 52, 54, 56, 58, 60, 62, 64, 66, 68],
+    };
+
+
+    function detectProduct(name) {
+        const n = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (/tailoring/.test(n) || /\d\/\d\s*short/.test(n) || /\b(1\/5|2\/5|3\/5|4\/5)\b/.test(n)) return { category: 'bottom', fit: 'tailoring' };
+        if (/underwear|cueca/.test(n)) return { category: 'bottom', fit: 'underwear' };
+        if (/sweatpant|sweatshort|sweat pant|sweat short|calca|bermuda/.test(n)) return { category: 'bottom', fit: 'sweat' };
+        if (/henley/.test(n)) return { category: 'top', fit: 'boxyHenley' };
+        if (/boxy.*(hoodie|crewneck|crew)/.test(n) || /(hoodie|crewneck|crew).*boxy/.test(n)) return { category: 'top', fit: 'boxyHoodie' };
+        if (/puffer|jacket/.test(n)) return { category: 'top', fit: 'puffer' };
+        if (/vest/.test(n)) return { category: 'top', fit: 'vest' };
+        if (/(hoodie|hoodie zip|half zip|crewneck|crew neck)/.test(n) && !/oversized|boxy|short sleeve/.test(n)) return { category: 'top', fit: 'hoodie' };
+        if (/oversized.*(hoodie|crewneck|crew|short sleeve)/.test(n) || /short sleeve.*(hoodie|crewneck)/.test(n)) return { category: 'top', fit: 'oversizedSS' };
+        if (/oversized|boxy tee|2\/4/.test(n)) return { category: 'top', fit: 'oversized' };
+        return { category: 'top', fit: 'regular' };
+    }
+
+
+
+
+
+
+    let currentProduct = { category: 'top', fit: 'regular' };
+
+    function calculateFinalSize() {
+        // Feature desativada: não faz mais cálculos de tamanho
+        return;
+    }
+
+
+    // ─── LOCK / UNLOCK SCROLL DA PÁGINA ──────────────────────────────────────────
+
+
+    let scrollY = 0;
+
+
+    function lockBodyScroll() {
+        scrollY = window.scrollY;
+        document.body.style.position = 'fixed';
+        document.body.style.top = `-${scrollY}px`;
+        document.body.style.left = '0';
+        document.body.style.right = '0';
+        document.body.style.overflowY = 'scroll';
+    }
+
+
+    function unlockBodyScroll() {
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.left = '';
+        document.body.style.right = '';
+        document.body.style.overflowY = '';
+        window.scrollTo(0, scrollY);
+    }
+
+
+    // ─── ESTILOS ──────────────────────────────────────────────────────────────────
+
+
+    const styles = `
+/* PL: borda arredondada do modal */@media(min-width:768px){.q-card-ia,.q-card,#q-card-ia,#q-card,.q-modal-card{border-radius:16px !important;overflow:hidden;}}
+        /* ── Fontes ── */
+
+        :root {
+            --c-bg: #ffffff;
+            --c-surface: #f7f6f4;
+            --c-ink: #111111;
+            --c-muted: #999;
+            --c-line: #e8e8e8;
+            --c-accent: #ff56ff;
+            --c-accent-dark: #f02ff0;
+            --c-danger: #cc3333;
+            --font-display: inherit;
+            --font-body: inherit;
+        }
+
+        /* ── Trigger (selo sobre foto) ── */
+        @keyframes q-shake { 0%,50%,100%{transform:rotate(0deg)} 10%,30%{transform:rotate(-10deg)} 20%,40%{transform:rotate(10deg)} }
+        .q-btn-trigger-ia {
+            position: absolute !important; top: 14px !important; right: 14px !important; left: auto !important; bottom: auto !important; z-index: 100 !important;
+            background: none; border: none; padding: 0 !important; margin: 0 !important; cursor: pointer;
+            width: 70px !important; height: 70px !important; max-width: 70px !important; box-sizing: border-box;
+            display: flex; align-items: center; justify-content: center;
+            filter: drop-shadow(0 3px 10px rgba(0,0,0,0.22));
+            animation: q-shake 3s infinite;
+            transition: filter 0.2s;
+        }
+        .q-btn-trigger-ia:hover { filter: drop-shadow(0 6px 18px rgba(0,0,0,0.32)); }
+        .q-btn-trigger-ia img { width: 100%; height: 100%; object-fit: contain; }
+        @media (min-width: 768px) { .q-btn-trigger-ia { width: 70px; height: 70px; } }
+
+        /* ── Inline button ── */
+        .q-btn-inline-provador {
+            display: flex; align-items: center; justify-content: center; gap: 7px;
+            width: 100%; padding: 13px 16px;
+            background: #fff; color: var(--c-accent);
+            border: 1.5px solid var(--c-accent); border-radius: 0;
+            font-family: 'Work Sans', var(--font-body), sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase;
+            cursor: pointer; transition: background 0.25s, color 0.25s;
+            margin: 12px 0 4px; box-sizing: border-box;
+        }
+        .q-btn-inline-provador:hover { background: var(--c-accent); color: #fff; }
+        .q-btn-inline-provador svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+        /* ── Modal overlay ── */
+        @keyframes q-modal-in { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+        #q-modal-ia {
+            display: none; position: fixed; inset: 0; z-index: 999999;
+            background: rgba(240,238,235,0.96);
+            font-family: var(--font-body);
+            overflow-y: auto; box-sizing: border-box;
+        }
+        #q-modal-ia * { box-sizing: border-box; }
+
+        /* ── Card ── */
+        .q-card-ia {
+            width: 100%; min-height: 100vh;
+            background: var(--c-bg); color: var(--c-ink);
+            display: flex; flex-direction: column; position: relative;
+            animation: q-modal-in 0.35s cubic-bezier(0.22,1,0.36,1);
+        }
+        @media (min-width: 768px) {
+            #q-modal-ia { display: none; align-items: center; justify-content: center; }
+            .q-card-ia {
+                width: 440px; max-width: 92vw; min-height: auto;
+                max-height: 96vh; border: none;
+                box-shadow: 0 32px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.06);
+                overflow: hidden;
+            }
+        }
+
+        /* ── Close ── */
+        .q-close-ia {
+            position: absolute; top: 18px; right: 18px;
+            background: none; border: none;
+            font-size: 20px; font-weight: 300; color: var(--c-muted);
+            cursor: pointer; z-index: 10; line-height: 1; padding: 4px 6px;
+            transition: color 0.2s;
+        }
+        .q-close-ia:hover { color: var(--c-ink); }
+
+        /* ── Content scroll ── */
+        .q-content-scroll {
+            flex: 1; padding: 0; overflow-y: auto;
+            text-align: left; display: flex; flex-direction: column;
+        }
+        .q-content-scroll::-webkit-scrollbar { width: 3px; }
+        .q-content-scroll::-webkit-scrollbar-thumb { background: var(--c-line); }
+
+        @media (max-width: 767px) {
+            #q-modal-ia { display:none; overflow-y:auto; align-items:flex-start; justify-content:center; }
+            #q-modal-ia[style*="flex"] { display:flex !important; }
+            .q-card-ia { width:100%; border:none; margin:0; min-height:100svh; }
+            .q-content-scroll { flex: 1; }
+        }
+
+        /* ── Header strip ── */
+        #q-header-provador {
+            padding: 28px 28px 0;
+            display: flex; flex-direction: column; align-items: center;
+            text-align: center; gap: 10px;
+            border-bottom: 1px solid var(--c-line);
+            padding-bottom: 22px; margin-bottom: 0;
+        }
+        #q-header-provador h1 {
+            margin: 0;
+            font-family: var(--font-display);
+            font-size: 22px; letter-spacing: 4px;
+            color: var(--c-ink); text-transform: uppercase;
+            font-weight: 400; line-height: 1;
+        }
+
+        /* ── Main step ── */
+        #q-step-photo {
+            display: flex; flex-direction: column; padding: 28px 28px 32px;
+            gap: 0; align-items: stretch;
+        }
+
+        /* ── Labels & inputs ── */
+        .q-field-label {
+            display: block; font-size: 10px; font-weight: 600;
+            letter-spacing: 2px; text-transform: uppercase;
+            color: var(--c-muted); margin-bottom: 8px;
+        }
+        .q-phone-wrap { margin-bottom: 28px; }
+        .q-input {
+            display: block; width: 100%; height: 52px;
+            padding: 0 16px; margin: 0;
+            background: var(--c-surface); border: 1.5px solid transparent;
+            border: 1.5px solid var(--c-line); border-radius: 14px;
+            font-size: 16px; font-family: var(--font-body); font-weight: 400;
+            color: var(--c-ink); outline: none;
+            -webkit-appearance: none; appearance: none; transition: border-color 0.2s;
+        }
+        .q-input:focus { border-color: var(--c-ink); background: #fff; }
+        .q-input::placeholder { color: #bbb; }
+
+        .q-provas-msg:empty { display: none; }
+        .q-provas-msg {
+            font-size: 13px; margin: 2px 0 20px; letter-spacing: 0.3px;
+            color: var(--c-accent-dark); font-weight: 600;
+            background: rgba(255, 86, 255, 0.08);
+            border: 1px solid rgba(255, 86, 255, 0.35);
+            border-radius: 6px;
+            padding: 10px 14px;
+            text-align: center;
+            transition: background 0.2s, color 0.2s, border-color 0.2s;
+        }
+        .q-provas-msg.is-warn {
+            color: var(--c-danger);
+            background: rgba(204,51,51,0.08);
+            border-color: rgba(204,51,51,0.3);
+            font-weight: 600;
+        }
+
+        .q-status-msg {
+            display: none; font-size: 11px; color: var(--c-danger);
+            font-weight: 500; margin-top: 6px; letter-spacing: 0.3px;
+        }
+
+        /* ── Section label ── */
+        .q-section-label {
+            font-family: var(--font-display);
+            font-size: 16px; letter-spacing: 3px; text-transform: uppercase;
+            color: var(--c-ink); margin: 0 0 14px; font-weight: 400;
+            text-align: center;
+        }
+
+        /* ── Tip ── */
+        .q-tip-box {
+            display: flex; align-items: center; gap: 9px;
+            background: var(--c-surface);
+            padding: 11px 14px; margin-bottom: 20px;
+            font-size: 11.5px; color: var(--c-muted); line-height: 1.45;
+            border-radius: 6px;
+        }
+        .q-tip-box i { color: var(--c-ink); font-size: 15px; flex-shrink: 0; }
+        /* ── Required field marker + shake feedback ── */
+        .q-required-mark { color: var(--c-danger); font-weight: 700; margin-left: 4px; }
+        @keyframes q-shake-x {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
+            20%, 40%, 60%, 80% { transform: translateX(6px); }
+        }
+        .q-shake { animation: q-shake-x 0.5s cubic-bezier(.36,.07,.19,.97); }
+        .q-input.is-error {
+            border-color: var(--c-danger) !important;
+            background: rgba(204,51,51,0.06) !important;
+            box-shadow: 0 0 0 3px rgba(204,51,51,0.15);
+        }
+        .q-face-frame.is-error {
+            outline: 3px solid var(--c-danger);
+            outline-offset: 2px;
+            background: rgba(204,51,51,0.06);
+        }
+        .q-validation-hint {
+            display: none;
+            background: var(--c-danger);
+            color: #fff;
+            font-size: 13px; font-weight: 600;
+            letter-spacing: 0.3px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            text-align: center;
+            box-shadow: 0 3px 10px rgba(204,51,51,0.25);
+            animation: q-pop-in 0.25s ease;
+        }
+        .q-validation-hint.is-visible { display: block; }
+        @keyframes q-pop-in {
+            0% { opacity: 0; transform: translateY(-6px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+
+        /* ── Face frame ── */
+        @keyframes q-frame-pulse { 0%,100%{opacity:0.3} 50%{opacity:0.7} }
+        .q-face-frame {
+            position: relative; width: 200px; height: 260px;
+            margin: 0 auto 24px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden; background: var(--c-surface);
+            border-radius: 4px;
+            transition: transform 0.2s;
+        }
+        .q-face-frame:hover { transform: scale(1.015); }
+        .q-face-frame img { width: 100%; height: 100%; object-fit: cover; display: none; }
+        .q-face-placeholder { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+        .q-face-placeholder i { font-size: 72px; color: #d0d0d0; }
+        /* Corner marks — clean editorial style */
+        .q-face-corner {
+            position: absolute; width: 20px; height: 20px;
+            border-color: var(--c-ink); border-style: solid;
+            transition: border-color 0.2s;
+        }
+        .q-face-corner-tl { top: 0; left: 0; border-width: 2px 0 0 2px; }
+        .q-face-corner-tr { top: 0; right: 0; border-width: 2px 2px 0 0; }
+        .q-face-corner-bl { bottom: 0; left: 0; border-width: 0 0 2px 2px; }
+        .q-face-corner-br { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
+
+        /* ── Upload buttons ── */
+        .q-upload-btns {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 8px; width: 100%; margin-bottom: 24px;
+        }
+        .q-upload-btn {
+            display: flex; align-items: center; justify-content: center; gap: 7px;
+            padding: 12px 8px;
+            border: 1.5px solid var(--c-line);
+            background: transparent; color: var(--c-ink);
+            font-family: var(--font-body); font-size: 12px; font-weight: 500;
+            cursor: pointer; transition: border-color 0.2s, background 0.2s; border-radius: 14px;
+        }
+        .q-upload-btn:hover { border-color: var(--c-ink); background: var(--c-surface); }
+        .q-upload-btn i { font-size: 16px; }
+
+        /* ── Terms ── */
+        .q-terms-row {
+            display: flex; align-items: flex-start; gap: 10px;
+            font-size: 11.5px; color: var(--c-muted); cursor: pointer;
+            line-height: 1.5; margin-bottom: 20px;
+            justify-content: center; text-align: center;
+        }
+        .q-terms-row input { margin-top: 3px; cursor: pointer; accent-color: var(--c-ink); flex-shrink: 0; }
+        .q-terms-row a { color: var(--c-ink); text-decoration: underline; text-underline-offset: 2px; }
+
+        /* ── CTA buttons ── */
+        .q-btn-black {
+            width: 100%; height: 52px;
+            background: var(--c-accent); color: #fff;
+            border: none; border-radius: 14px;
+            font-family: var(--font-display); font-size: 14px;
+            letter-spacing: 3px; text-transform: uppercase;
+            cursor: pointer; transition: opacity 0.2s; box-sizing: border-box;
+        }
+        .q-btn-black:hover:not(:disabled) { opacity: 0.82; }
+        .q-btn-black:disabled { background: #ccc; cursor: not-allowed; }
+        .q-btn-outline {
+            width: 100%; height: 52px;
+            background: transparent; color: var(--c-ink);
+            border: 1.5px solid var(--c-line); border-radius: 14px;
+            font-family: var(--font-display); font-size: 14px;
+            letter-spacing: 3px; text-transform: uppercase;
+            cursor: pointer; transition: border-color 0.2s, background 0.2s; box-sizing: border-box;
+        }
+        .q-btn-outline:hover { border-color: var(--c-ink); background: var(--c-surface); }
+
+        /* ── PIX screen ── */
+        #q-step-pix {
+            display: none; text-align: center;
+            padding: 36px 28px; flex-direction: column; gap: 16px; align-items: center;
+        }
+        #q-step-pix h2 {
+            font-family: var(--font-display); font-size: 19px;
+            letter-spacing: 3px; text-transform: uppercase; margin: 0; font-weight: 400;
+        }
+        .q-pix-subtitle { font-size: 13px; color: var(--c-muted); margin: 0; line-height: 1.6; }
+        .q-pix-qr { width: 180px; height: 180px; border: 1px solid var(--c-line); padding: 6px; margin: 0 auto; }
+        .q-pix-qr img { width: 100%; height: 100%; }
+        .q-pix-copiacola { display: flex; gap: 8px; width: 100%; max-width: 320px; margin: 0 auto; }
+        .q-pix-copiacola input {
+            flex: 1; height: 40px; padding: 0 12px; border: 1px solid var(--c-line);
+            background: var(--c-surface); font-size: 11px; font-family: var(--font-body);
+            outline: none; min-width: 0;
+        }
+        .q-pix-copiacola button {
+            height: 40px; padding: 0 14px; background: var(--c-ink); color: #fff;
+            border: none; font-size: 10px; font-weight: 600; letter-spacing: 1px;
+            text-transform: uppercase; cursor: pointer;
+        }
+        .q-pix-status { font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--c-muted); }
+        @keyframes q-pix-pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
+        .q-pix-waiting { animation: q-pix-pulse 1.5s infinite ease-in-out; color: #d97706; }
+        .q-pix-approved { color: #16a34a; }
+        .q-pix-cancel { font-size: 11px; color: var(--c-muted); text-decoration: underline; cursor: pointer; margin-top: 4px; }
+
+        /* ── Loading ── */
+        @keyframes q-slide { from{transform:translateX(-100%)} to{transform:translateX(100%)} }
+        @keyframes q-alt-show { 0%,5%{opacity:0;transform:translateY(6px)} 15%,45%{opacity:1;transform:translateY(0)} 55%,100%{opacity:0;transform:translateY(-6px)} }
+        @keyframes q-alt-hide { 0%,55%{opacity:0;transform:translateY(6px)} 65%,95%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-6px)} }
+        #q-loading-box {
+            display: none; padding: 28px;
+            text-align: center; flex: 1; flex-direction: column;
+            align-items: center; justify-content: center; min-height: 60vh;
+        }
+        .q-loading-texts {
+            position: relative; height: 36px; width: 100%;
+            display: flex; align-items: center; justify-content: center;
+            margin-bottom: 24px;
+        }
+        .q-loading-t1, .q-loading-t2 {
+            position: absolute; width: 100%;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .q-loading-t1 {
+            font-family: var(--font-display); font-size: 15px; letter-spacing: 4px;
+            text-transform: uppercase; color: var(--c-ink);
+            animation: q-alt-show 3.6s ease-in-out infinite;
+        }
+        .q-loading-t2 {
+            animation: q-alt-hide 3.6s ease-in-out infinite;
+            text-decoration: none; opacity: 0;
+        }
+        .q-loading-t2 span {
+            font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
+            color: var(--c-muted); font-family: var(--font-body);
+        }
+        .q-loading-t2 img { height: 24px !important; width: auto !important; max-height: 24px !important; max-width: 150px !important; opacity: 0.7; object-fit: contain; }
+        .q-loading-bar { height: 3px; background: var(--c-line); width: 100%; position: relative; overflow: hidden; border-radius: 2px; }
+        .q-loading-bar > div {
+            position: absolute; top: 0; left: 0; height: 100%; width: 100%;
+            background: var(--c-ink); border-radius: 2px;
+            transform: scaleX(0); transform-origin: left;
+            transition: transform 0.3s ease-out;
+        }
+
+        /* ── Result ── */
+        #q-step-result { display: none; flex-direction: column; gap: 0; align-items: stretch; }
+
+        .q-res-title {
+            display: block;
+            font-family: var(--font-display); font-size: 15px;
+            letter-spacing: 3px; text-transform: uppercase;
+            color: var(--c-ink); padding: 20px 28px 16px; margin: 0;
+            border-bottom: 1px solid var(--c-line);
+            text-align: center;
+        }
+        .q-res-subtitle, .q-res-note { display: none; }
+
+        #q-result-img-col {
+            width: 100%; max-height: 56vh; background: var(--c-surface);
+            overflow: hidden; display: flex; align-items: center; justify-content: center;
+        }
+        #q-result-img-col img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+
+        #q-result-actions-col {
+            display: flex; flex-direction: column; gap: 8px;
+            padding: 20px 28px 26px;
+        }
+        .q-res-mobile-only { margin: 0; }
+
+        /* CTA de compra na tela de resultado */
+        .q-result-prodinfo { text-align: left; margin-bottom: 6px; }
+        .q-result-prodname {
+            font-family: var(--font-body); font-size: 20px; font-weight: 700;
+            color: var(--c-ink); line-height: 1.25; margin-bottom: 6px;
+        }
+        .q-result-prodprice {
+            font-family: var(--font-display); font-size: 28px; letter-spacing: .5px; font-weight: 700;
+            color: var(--c-ink); line-height: 1;
+        }
+        .q-result-installment {
+            font-family: var(--font-body); font-size: 12px; color: var(--c-muted);
+            margin-top: 4px; letter-spacing: .2px;
+        }
+        .q-scarcity {
+            margin-top: 12px; font-family: var(--font-body); font-size: 13px; font-weight: 700;
+            color: var(--c-danger); letter-spacing: 1.5px; text-transform: uppercase;
+            display: flex; align-items: center; justify-content: flex-start; gap: 6px;
+        }
+        .q-scarcity i { font-size: 15px; }
+        /* Selos de segurança */
+        .q-seals {
+            display: flex; justify-content: flex-start; gap: 30px;
+            margin: 8px 0; padding: 12px 0;
+            border-top: 1px solid var(--c-line); border-bottom: 1px solid var(--c-line);
+        }
+        .q-seal { display: flex; align-items: center; gap: 9px; }
+        .q-seal > i { font-size: 24px; color: var(--c-ink); flex-shrink: 0; }
+        .q-seal span {
+            font-family: var(--font-body); font-size: 12px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: .6px; line-height: 1.25;
+            color: var(--c-ink); text-align: left;
+        }
+        .q-fakebuy {
+            position: fixed; left: 18px; bottom: 18px; z-index: 2147483000;
+            background: var(--c-bg, #fff); color: var(--c-ink); border: 1px solid var(--c-line); border-radius: 10px;
+            box-shadow: 0 8px 28px -6px rgba(0,0,0,.28); padding: 11px 14px;
+            display: flex; align-items: center; gap: 10px; max-width: 290px;
+            font-family: var(--font-body); opacity: 0; transform: translateY(14px);
+            pointer-events: none; transition: opacity .35s ease, transform .35s ease;
+        }
+        .q-fakebuy.show { opacity: 1; transform: translateY(0); }
+        .q-fakebuy > i { font-size: 22px; color: var(--c-ink); flex-shrink: 0; }
+        .q-fakebuy strong { font-size: 12.5px; font-weight: 700; }
+        .q-fakebuy > div { display: flex; flex-direction: column; line-height: 1.35; }
+        .q-fakebuy span { font-size: 10.5px; color: var(--c-muted); }
+        @media (max-width:560px){ .q-fakebuy{ left:12px; right:12px; bottom:12px; max-width:none; } }
+        .q-btn-buy-now {
+            background: var(--c-accent); color: #fff; border: 1px solid var(--c-accent);
+            width: 100%; padding: 17px 18px; font-family: var(--font-body);
+            font-weight: 700; font-size: 15px; letter-spacing: .2px; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            border-radius: 14px; transition: .2s; line-height: 1.2;
+        }
+        .q-btn-buy-now:hover { opacity: .88; }
+        .q-btn-buy-now .q-buy-price { font-weight: 800; white-space: nowrap; }
+        .q-buy-trust {
+            text-align: center; font-size: 11px; color: var(--c-muted);
+            margin-top: 2px; letter-spacing: .2px;
+        }
+
+        /* ── Related products ── */
+        #q-related-products { padding: 0 28px 28px; }
+        #q-related-products h4 {
+            font-family: var(--font-display); font-size: 13px;
+            letter-spacing: 3px; text-transform: uppercase;
+            color: var(--c-muted); margin: 20px 0 12px; font-weight: 400;
+        }
+        .q-related-grid {
+            display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px;
+            -webkit-overflow-scrolling: touch; justify-content: center;
+        }
+        .q-related-grid::-webkit-scrollbar { display: none; }
+        .q-related-card {
+            flex: 0 0 calc(26% - 7px); min-width: 72px; max-width: 88px;
+            text-decoration: none; color: var(--c-ink);
+            display: flex; flex-direction: column; gap: 5px;
+        }
+        .q-related-card img {
+            width: 100%; aspect-ratio: 1/1; object-fit: cover;
+            border: 1px solid var(--c-line); display: block; border-radius: 3px;
+        }
+        .q-related-card-name {
+            font-size: 9px; font-weight: 500; line-height: 1.4; color: var(--c-ink);
+            overflow: hidden; display: -webkit-box;
+            -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        }
+
+        /* Desktop result split */
+        @media (min-width: 768px) {
+            .q-card-ia.is-result { width: 780px !important; max-width: 90vw !important; max-height: 92vh !important; }
+                /* .q-powered-footer always visible */
+            .q-card-ia.is-result .q-content-scroll {
+                padding: 0 !important; overflow-y: auto !important;
+                display: flex !important; flex-direction: column !important;
+            }
+            .q-card-ia.is-result #q-step-result {
+                display: flex !important; flex-direction: row !important;
+                flex-wrap: wrap !important; width: 100%; align-items: stretch; gap: 0;
+            }
+            .q-card-ia.is-result .q-res-title {
+                flex-basis: 100%; order: -1;
+                font-size: 16px; letter-spacing: 3px;
+                padding: 16px 24px; border-bottom: 1px solid var(--c-line);
+            }
+            .q-card-ia.is-result #q-result-img-col {
+                width: 44% !important; min-height: 360px !important;
+                border-right: 1px solid var(--c-line); flex-shrink: 0;
+            }
+            .q-card-ia.is-result #q-result-img-col img {
+                width: 100% !important; height: 100% !important;
+                object-fit: cover !important; object-position: top center !important;
+            }
+            .q-card-ia.is-result #q-result-actions-col {
+                width: 56% !important; padding: 28px 24px !important;
+                display: flex !important; flex-direction: column !important;
+                justify-content: flex-start; gap: 10px;
+                overflow-y: auto;
+            }
+            .q-card-ia.is-result #q-related-products { padding: 0; margin-top: 4px; }
+            .q-card-ia.is-result .q-res-mobile-only { display: flex !important; }
+        }
+
+        /* ── Error screen ── */
+        #q-step-error {
+            display: none; flex-direction: column; gap: 20px;
+            align-items: center; text-align: center;
+            padding: 52px 28px;
+        }
+        #q-step-error h2 {
+            font-family: var(--font-display); font-size: 18px;
+            letter-spacing: 3px; text-transform: uppercase; margin: 0; font-weight: 400;
+        }
+        #q-step-error p { font-size: 13px; color: var(--c-muted); margin: 0; line-height: 1.6; }
+
+        /* ── Footer ── */
+        .q-powered-footer {
+            background: var(--c-surface); padding: 14px 20px;
+            display: flex; align-items: center; justify-content: center; gap: 9px;
+            flex-shrink: 0; border-top: 1px solid var(--c-line); text-decoration: none;
+        }
+        .q-powered-footer span { font-size: 9.5px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--c-muted); }
+        .q-quantic-logo { height: 18px !important; width: auto !important; max-height: 18px !important; max-width: 130px !important; opacity: 0.7; object-fit: contain; }
+    `;
+
+
+    // ─── IMAGEM DO BOTÃO (trigger) ─────────────────────────────────────────────
+    const stampImageHTML = `<img src="https://lucasdecamargosilva.github.io/fbitsmeninaflor/img/selo-provador.png" alt="Provador Virtual" style="width:100%;height:100%;object-fit:contain;">`;
+
+
+
+    // ─── HTML ─────────────────────────────────────────────────────────────────────
+
+
+    const html = `
+        <div id="q-modal-ia">
+            <div class="q-card-ia">
+                <button type="button" class="q-close-ia" id="q-close-btn">&times;</button>
+                <div class="q-content-scroll">
+
+                    <!-- Persistent header (all steps) -->
+                    <div id="q-header-provador">
+                        <h1>Provador Virtual</h1>
+                        <img src="https://lotusoculos.fbitsstatic.net/sf/img/Logo.png?theme=loja_com_novo_checkout&v=202606271648&w=" alt="Óculos Menina Flor" style="height:44px;width:auto;max-width:200px;object-fit:contain;"/>
+                    </div>
+
+                    <!-- Main step -->
+                    <div id="q-step-photo">
+                        <!-- WhatsApp -->
+                        <div class="q-phone-wrap">
+                            <span class="q-field-label">Seu WhatsApp<span class="q-required-mark">*</span></span>
+                            <input type="tel" id="q-phone" class="q-input" placeholder="(11) 99999-9999" maxlength="15">
+                            <div id="q-phone-error" class="q-status-msg">N&#250;mero inv&#225;lido</div>
+                        </div>
+                        <div class="q-provas-msg" id="q-provas-msg"></div>
+
+                        <!-- Photo section -->
+                        <p class="q-section-label">Envie sua foto</p>
+                        <div class="q-tip-box">
+                            <svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M176 232a8 8 0 0 1-8 8H88a8 8 0 0 1 0-16h80a8 8 0 0 1 8 8Zm40-128a87.6 87.6 0 0 1-33.6 69.2A16.2 16.2 0 0 0 176 186v6a16 16 0 0 1-16 16H96a16 16 0 0 1-16-16v-6a16 16 0 0 0-6.2-12.6A87.6 87.6 0 0 1 40 104.5C39.7 56.6 78.5 16.4 126.4 16A88 88 0 0 1 216 104Z"/></svg>
+                            <span>Use uma foto n&#237;tida, de frente, com boa ilumina&#231;&#227;o.</span>
+                        </div>
+
+                        <!-- Face frame -->
+                        <div class="q-face-frame" id="q-face-frame">
+                            <div class="q-face-corner q-face-corner-tl"></div>
+                            <div class="q-face-corner q-face-corner-tr"></div>
+                            <div class="q-face-corner q-face-corner-bl"></div>
+                            <div class="q-face-corner q-face-corner-br"></div>
+                            <img id="q-pre-img" alt="Sua foto">
+                            <div class="q-face-placeholder" id="q-face-placeholder">
+                                <svg viewBox="0 0 256 256" width="80" height="80" fill="#d4d4d4" aria-hidden="true"><path d="M128 24a104 104 0 1 0 104 104A104.1 104.1 0 0 0 128 24Zm0 48a32 32 0 1 1-32 32 32 32 0 0 1 32-32Zm0 144a87.6 87.6 0 0 1-56.6-20.7 8 8 0 0 1-2.4-8.8 72 72 0 0 1 118 0 8 8 0 0 1-2.4 8.8A87.6 87.6 0 0 1 128 216Z"/></svg>
+                            </div>
+                        </div>
+
+                        <!-- Upload buttons -->
+                        <div class="q-upload-btns">
+                            <button class="q-upload-btn" id="q-btn-camera">
+                                <svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M208 56h-27.7l-13.8-20.7A8 8 0 0 0 160 32H96a8 8 0 0 0-6.5 3.3L75.7 56H48a24 24 0 0 0-24 24v112a24 24 0 0 0 24 24h160a24 24 0 0 0 24-24V80a24 24 0 0 0-24-24Zm-80 128a44 44 0 1 1 44-44 44 44 0 0 1-44 44Z"/></svg> Tirar foto
+                            </button>
+                            <button class="q-upload-btn" id="q-btn-gallery">
+                                <svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M216 40H40a16 16 0 0 0-16 16v144a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V56a16 16 0 0 0-16-16Zm0 16v102.7l-26.3-26.4a16 16 0 0 0-22.6 0L154 145.4l-37.7-37.7a16 16 0 0 0-22.6 0L40 161.4V56ZM76 92a16 16 0 1 1 16 16 16 16 0 0 1-16-16Z"/></svg> Da galeria
+                            </button>
+                            <input type="file" id="q-camera-input" accept="image/*" capture="user" style="display:none">
+                            <input type="file" id="q-gallery-input" accept="image/*" style="display:none">
+                        </div>
+
+                        <!-- Terms -->
+                        <label class="q-terms-row">
+                            <input type="checkbox" id="q-accept-terms">
+                            <span>Concordo com os <a href="http://provoulevou.com.br/termos.html" target="_blank">Termos e Condi&#231;&#245;es</a></span>
+                        </label>
+
+                        <div id="q-validation-hint" class="q-validation-hint"></div>
+                        <button class="q-btn-black" id="q-btn-generate">Provar &#243;culos</button>
+                    </div>
+
+                    <!-- PIX -->
+                    <div id="q-step-pix">
+                        <h2>Prova Extra</h2>
+                        <p class="q-pix-subtitle">Limite de 3 provas atingido.<br>Pague R$1 via PIX para mais uma:</p>
+                        <div class="q-pix-qr"><img id="q-pix-qr-img" alt="QR Code PIX"></div>
+                        <div class="q-pix-copiacola">
+                            <input type="text" id="q-pix-code" readonly placeholder="C&#243;digo PIX...">
+                            <button id="q-pix-copy-btn">Copiar</button>
+                        </div>
+                        <div id="q-pix-status-msg" class="q-pix-status q-pix-waiting">Aguardando pagamento...</div>
+                        <p class="q-pix-cancel" id="q-pix-cancel">Cancelar</p>
+                    </div>
+
+                    <!-- Loading -->
+                    <div id="q-loading-box">
+                        <div class="q-loading-texts">
+                            <div class="q-loading-t1">Gerando sua prova...</div>
+                            <a href="https://provoulevou.com.br" target="_blank" class="q-loading-t2">
+                                <span>Powered by</span>
+                                <img src="https://lucasdecamargosilva.github.io/fbitsmeninaflor/img/logo-provou-levou.png" alt="Provou Levou">
+                            </a>
+                        </div>
+                        <div class="q-loading-bar"><div></div></div>
+                    </div>
+
+                    <!-- Resultado -->
+                    <div id="q-step-result">
+                        <span class="q-res-title">Veja como ficou em voc&ecirc;</span>
+                        <div id="q-result-img-col">
+                            <img id="q-final-view-img">
+                        </div>
+                        <div id="q-result-actions-col">
+                            <div class="q-fakebuy" id="q-fakebuy"></div>
+                            <div class="q-result-prodinfo" id="q-result-prodinfo" style="display:none;">
+                                <div class="q-result-prodname" id="q-result-prodname"></div>
+                                <div class="q-result-prodprice" id="q-result-prodprice"></div>
+                                <div class="q-result-installment" id="q-result-installment"></div>
+                                <div class="q-scarcity" id="q-scarcity" style="display:none;"><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true" style="vertical-align:-0.15em"><path d="M173.8 32.4a8 8 0 0 0-12.6 4.2c-5.4 24.9-19.9 44.6-32.7 58.2a136 136 0 0 1-10.6 9.9 79.9 79.9 0 0 0-25.5-32 8 8 0 0 0-12.6 4.9c-3.4 20.6-13.6 35.9-22.6 49.4C47.5 141.9 40 153.2 40 168a88 88 0 0 0 176 0c0-56.6-27.7-108-42.2-135.6Z"/></svg> APENAS <strong id="q-scarcity-n"></strong>&nbsp;UNIDADES RESTANTES</div>
+                            </div>
+                            <div class="q-seals" id="q-seals" style="display:none;">
+                                <div class="q-seal"><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M208 40H48a16 16 0 0 0-16 16v56c0 75.8 63.8 100.9 76.6 105.2a15.7 15.7 0 0 0 10.8 0C132.2 212.9 196 187.8 196 112h12V56a16 16 0 0 0 0-16Zm-30.3 70-56 56a8 8 0 0 1-11.4 0l-24-24a8 8 0 0 1 11.4-11.4L116 149.3l50.3-50.4a8 8 0 0 1 11.4 11.4Z"/></svg><span>Compra<br>Segura</span></div>
+                                <div class="q-seal"><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M208 80h-32V56a48 48 0 0 0-96 0v24H48a16 16 0 0 0-16 16v112a16 16 0 0 0 16 16h160a16 16 0 0 0 16-16V96a16 16 0 0 0-16-16ZM96 56a32 32 0 0 1 64 0v24H96Zm40 132.9V200a8 8 0 0 1-16 0v-11.1a20 20 0 1 1 16 0Z"/></svg><span>Pagamento<br>Seguro</span></div>
+                            </div>
+                            <button class="q-btn-buy-now" id="q-btn-buy-now" style="display:none;">Comprar Agora</button>
+                            <div id="q-related-products" style="display:none;">
+                                <h4>Veja tamb&eacute;m</h4>
+                                <div class="q-related-grid" id="q-related-grid"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Erro -->
+                    <div id="q-step-error">
+                        <h2>ALTA DEMANDA</h2>
+                        <p>Aguarde alguns segundos para tentar novamente.</p>
+                        <button class="q-btn-outline" id="q-error-back">Voltar ao Produto</button>
+                        <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(0,0,0,.08);"><p style="font-size:12px;color:var(--c-muted);margin:0 0 8px;">Continua com problema? Fale direto com a Provou Levou:</p><a href="https://wa.me/5511938034714?text=Ol%C3%A1!%20Tive%20um%20problema%20ao%20usar%20o%20provador." target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:7px;background:#25D366;color:#fff;border-radius:10px;padding:10px 18px;font-family:inherit;font-weight:700;font-size:13px;text-decoration:none;"><svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.9c0 2.1.55 4.06 1.6 5.8L2 22l4.44-1.65a9.9 9.9 0 0 0 5.6 1.72h.01c5.46 0 9.9-4.45 9.9-9.9C21.95 6.45 17.5 2 12.04 2zm5.8 14.15c-.24.68-1.4 1.3-1.94 1.34-.5.05-1.13.07-1.82-.11-.42-.13-.96-.31-1.65-.61-2.9-1.25-4.8-4.17-4.94-4.36-.15-.19-1.18-1.57-1.18-2.99 0-1.42.75-2.12 1.01-2.41.27-.29.58-.36.77-.36l.55.01c.18.01.42-.07.66.5.24.59.83 2.04.9 2.18.07.15.12.32.02.51-.1.19-.15.31-.29.48-.15.17-.31.38-.44.51-.15.15-.3.31-.13.6.17.29.75 1.24 1.62 2.01 1.11.99 2.05 1.3 2.34 1.44.29.15.46.12.63-.07.17-.19.72-.84.91-1.13.19-.29.39-.24.66-.14.27.1 1.7.8 1.99.95.29.15.48.22.55.34.07.12.07.71-.17 1.39z"/></svg> Falar com a Provou Levou</a></div>
+                    </div>
+
+                </div>
+                <a href="https://provoulevou.com.br" target="_blank" class="q-powered-footer">
+                    <span>Powered by</span>
+                    <img src="https://lucasdecamargosilva.github.io/fbitsmeninaflor/img/logo-provou-levou.png" class="q-quantic-logo" alt="Provou Levou">
+                </a>
+            </div>
+        </div>
+    `;
+
+
+    // ─── INIT ─────────────────────────────────────────────────────────────────────
+
+
+    // ─── CTA DE COMPRA NO RESULTADO ───────────────────────────────────────────────
+
+    // Caminho do checkout da Nuvemshop. Se na loja o checkout direto não abrir,
+    // troque para '/comprar/' por '/carrinho' (1 linha) — é o único ponto a validar ao vivo.
+    var Q_CHECKOUT_URL = '/comprar/';
+
+    // Nome do produto robusto p/ FBITS com seletor de variante (seção "COR").
+    // Na Menina Flor cada cor é um SKU separado; ao trocar a cor a FBITS marca o
+    // radio na hora, mas o H1/URL só atualizam depois (navegação AJAX lenta). Se
+    // a variante MARCADA ainda não é a página atual, o H1 está defasado e mandaria
+    // o nome da cor errada (a "primeira variante"). Nesse caso usamos a variante
+    // marcada (reconstruída do slug do SKU). Caso normal → mantém o H1 (formatado).
+    // SKU-alvo p/ FBITS (Menina Flor): a variante MARCADA no seletor "COR" reflete a escolha
+    // do cliente na hora; o H1/og/URL só atualizam depois da navegação AJAX lenta. Fallback: og/URL.
+    // Pastas /img/p/<slug>/ que realmente existem nas imagens da pagina.
+    function plSkuFolders() {
+        var out = {};
+        try {
+            document.querySelectorAll('img').forEach(function (im) {
+                var s = (im.dataset && im.dataset.src) || im.getAttribute('data-src') || im.src || '';
+                var m = s.match(/\/img\/p\/([^/]+)\//);
+                if (m) out[m[1]] = 1;
+            });
+        } catch (e) {}
+        return out;
+    }
+
+    function plTargetSku() {
+        try {
+            var checked = document.querySelector('input.attribute-select:checked');
+            if (checked && checked.value) {
+                var seg = String(checked.value).trim()
+                    .replace(/^https?:\/\/[^/]+/, '').replace(/[#?].*$/, '').replace(/\/+$/, '')
+                    .split('/').filter(Boolean).pop();
+                // ⚠️ So aceita se for MESMO um SKU de produto da pagina. Em varios produtos
+                // esse input e' um seletor de COR e o value vem "preto"/"dourado" — o filtro
+                // virava /img/p/preto/ (nao casa nada), caia no fallback SEM filtro e entrava
+                // foto de OUTRO produto como referencia do gerador.
+                if (seg && plSkuFolders()[seg]) return seg;
+            }
+        } catch (e) {}
+        var og = (document.querySelector('meta[property="og:image"]') || {}).content || '';
+        var m = og.match(/\/img\/p\/([^/]+)\//);
+        if (m) return m[1];
+        var p = (location.pathname || '').replace(/\/+$/, '').split('/').filter(Boolean).pop();
+        return p || '';
+    }
+
+    // Nome do produto robusto: se a variante MARCADA ainda não é a página atual (H1 defasado
+    // pela navegação AJAX lenta da FBITS), reconstrói o nome da variante marcada; senão o H1.
+    function plProductName() {
+        var h1 = (document.querySelector('h1.product-title,h1.product-detail-info-name,h1.product__title,.product-single__title') || {}).innerText || document.title || '';
+        try {
+            var target = plTargetSku();
+            if (target) {
+                var path = (location.pathname || '').replace(/\/+$/, '');
+                if (path.indexOf(target) !== -1) return h1;
+                var name = target.replace(/-\d+$/, '').replace(/-/g, ' ').trim();
+                if (name) return name.toUpperCase();
+            }
+        } catch (e) {}
+        return h1;
+    }
+
+    function getMainPrice() {
+        // 0-FBITS) preço final do produto: .product-price__after.single-price (data-price=109.9).
+        //    O .single-price é só do produto principal (os "Veja também" usam .product-price__after sem single-price).
+        var fb = document.querySelector('.product-price__after.single-price');
+        if (fb) {
+            var dp = fb.getAttribute('data-price');
+            if (dp && /\d/.test(dp)) return 'R$ ' + parseFloat(dp).toFixed(2).replace('.', ',');
+            var mfb = (fb.textContent || '').match(/R\$\s*[\d.]+,\d{2}/);
+            if (mfb) return mfb[0].replace(/\s+/g, ' ');
+        }
+        // 0) preço final/promocional visível (tema Mozaik: <span class="de"><s>cheio</s></span> <span class="por">final</span>)
+        //    Evita pegar o preço cheio do JSON-LD quando o produto está em promoção.
+        var por = document.querySelector('.por');
+        if (por && /\d/.test(por.textContent || '')) {
+            var pt = (por.textContent || '').trim().replace(/\s+/g, ' ');
+            return /R\$/i.test(pt) ? pt : 'R$ ' + pt;
+        }
+        // 1) preço exibido na página (vários temas Nuvemshop)
+        var sel = '.js-price-display, [data-product-price], .product__price .price, .js-product-price, .price-display';
+        var el = document.querySelector(sel);
+        if (el) {
+            var t = (el.getAttribute('data-product-price') || el.textContent || '').trim();
+            if (t && /\d/.test(t)) {
+                // normaliza "R$ 289,00" / "28900" -> "R$ 289,00"
+                if (/^\d+$/.test(t)) { var n = (parseInt(t,10)/100).toFixed(2).replace('.',','); return 'R$ ' + n; }
+                return t.replace(/\s+/g,' ');
+            }
+        }
+        // 2) fallback: data-variants do produto principal (mesmo formato dos "Veja também")
+        var dv = document.querySelector('[data-variants]');
+        if (dv) {
+            try { var v = JSON.parse(dv.getAttribute('data-variants'))[0]; if (v && v.price_short) return v.price_short; } catch (e) {}
+        }
+        // 3) fallback universal: JSON-LD schema.org (temas custom/headless, ex: SvelteKit da Mozaik)
+        try {
+            var lds = document.querySelectorAll('script[type="application/ld+json"]');
+            for (var i = 0; i < lds.length; i++) {
+                var j = JSON.parse(lds[i].textContent);
+                var arr = Array.isArray(j) ? j : (j['@graph'] || [j]);
+                for (var k = 0; k < arr.length; k++) {
+                    var off = arr[k] && arr[k].offers;
+                    if (Array.isArray(off)) off = off[0];
+                    var pr = (off && off.price) || (arr[k] && arr[k].price);
+                    if (pr && /\d/.test(String(pr))) return 'R$ ' + parseFloat(pr).toFixed(2).replace('.', ',');
+                }
+            }
+        } catch (e) {}
+        return '';
+    }
+
+    function findStoreBuyBtn() {
+        return document.querySelector('button.product-buy:not(#product-buy-floating), button.product-buy, .js-addtocart, .btn-add-to-cart, [data-component="product.add-to-cart"], button[type="submit"].js-addtocart');
+    }
+
+    // Acha o form de produto real (o que tem o input add_to_cart = product_id)
+    function getProductForm() {
+        var f = document.getElementById('product_form');
+        if (f && f.querySelector('input[name="add_to_cart"]')) return f;
+        var inp = document.querySelector('input[name="add_to_cart"]');
+        if (inp && inp.closest('form')) return inp.closest('form');
+        return document.querySelector('form.js-product-form');
+    }
+
+    // Compra de verdade: submete uma CÓPIA do form do produto (POST real).
+    // A Nuvemshop só adiciona ao carrinho via POST — o GET antigo abria o
+    // carrinho vazio. O clone não tem o AJAX do tema, então faz POST nativo:
+    // servidor adiciona o item e redireciona pro carrinho JÁ com o produto.
+    function buyNow() {
+        // Tracking: registra o clique em "Comprar Agora" (marca carrinho_adicionado na prova)
+        try {
+            var _tp = (document.getElementById('q-phone') || {}).value || '';
+            var _td = (document.querySelector('h1.product-title,h1.product-detail-info-name,h1.product__title,.product-single__title') || {}).innerText || document.title || '';
+            fetch('https://n8n.segredosdodrop.com/webhook/pl-provador-buy-click', { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: _tp, origin: location.origin, produto: _td }) }).catch(function () {});
+        } catch (e) {}
+        // Fecha o provador ANTES de acionar a compra da loja: o modal de seleção de lentes/
+        // carrinho da loja tem z-index menor que o provador (999999), senão abre "por trás".
+        try { var _pm = document.getElementById('q-modal-ia'); if (_pm) _pm.style.display = 'none'; unlockBodyScroll(); } catch (e) {}
+        var src = getProductForm();
+        if (src) {
+            var clone = document.createElement('form');
+            clone.method = 'post';
+            clone.action = src.getAttribute('action') || '/comprar/';
+            clone.style.display = 'none';
+            src.querySelectorAll('input, select, textarea').forEach(function (el) {
+                if (!el.name) return;
+                if ((el.type === 'checkbox' || el.type === 'radio') && !el.checked) return;
+                var h = document.createElement('input');
+                h.type = 'hidden'; h.name = el.name; h.value = el.value;
+                clone.appendChild(h);
+            });
+            if (!clone.querySelector('[name="quantity"]')) {
+                var q = document.createElement('input');
+                q.type = 'hidden'; q.name = 'quantity'; q.value = '1';
+                clone.appendChild(q);
+            }
+            document.body.appendChild(clone);
+            clone.submit();
+            return;
+        }
+        // Fallback: botão nativo da loja — clica no frame seguinte, com o provador já fechado
+        var sb = findStoreBuyBtn();
+        if (sb) { requestAnimationFrame(function () { try { sb.click(); } catch (e) {} }); }
+    }
+
+    // Escassez — número estável por produto (não muda a cada refresh)
+    function scarcityCount(name) {
+        var h = 5381, s = String(name || '');
+        for (var i = 0; i < s.length; i++) h = (h * 33 + s.charCodeAt(i)) >>> 0;
+        var FLOOR = 8, _st = 10 + (h % 4);   // estoque inicial por produto (10..13)
+            var _dn = new Date(), _df = (_dn.getHours() * 60 + _dn.getMinutes()) / 1440;
+            var _q = _st - Math.floor(_df * 5);   // cai ao longo do dia
+            return _q < FLOOR ? FLOOR : _q;        // piso 8
+    }
+    // Notificações de compra (prova social)
+    var Q_FAKE_NAMES = ['Ana C.','Carlos M.','Mariana S.','João P.','Beatriz R.','Pedro A.','Juliana F.','Lucas T.','Fernanda L.','Rafael O.','Camila N.','Bruno G.','Larissa D.','Gabriel V.','Patrícia H.','Thiago B.','Aline M.','Rodrigo S.','Vanessa P.','Felipe C.','Letícia M.','Marcos A.'];
+    var Q_FAKE_WHEN = ['agora mesmo','há 1 minuto','há 2 minutos','há 4 minutos','há 6 minutos','há 9 minutos','há 12 minutos'];
+    var _fakeBuyTimer = null;
+    function _showFakeBuy() {
+        var step = document.getElementById('q-step-result');
+        var el = document.getElementById('q-fakebuy');
+        if (!el || !step || step.style.display === 'none') return;
+        var nm = Q_FAKE_NAMES[Math.floor(Math.random() * Q_FAKE_NAMES.length)];
+        var wh = Q_FAKE_WHEN[Math.floor(Math.random() * Q_FAKE_WHEN.length)];
+        el.innerHTML = '<svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M216 64h-40a48 48 0 0 0-96 0H40a16 16 0 0 0-16 16v120a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V80a16 16 0 0 0-16-16ZM128 32a32 32 0 0 1 32 32H96a32 32 0 0 1 32-32Zm88 168H40V80h40v24a8 8 0 0 0 16 0V80h64v24a8 8 0 0 0 16 0V80h40Z"/></svg><div><span style="font-size:12.5px;color:var(--c-ink);"><strong>' + nm + '</strong> comprou este produto</span><span>' + wh + ' &middot; compra verificada</span></div>';
+        el.classList.add('show');
+        clearTimeout(el._hideT);
+        el._hideT = setTimeout(function () { el.classList.remove('show'); }, 4500);
+    }
+    function startFakeBuy() {
+        stopFakeBuy();
+        setTimeout(_showFakeBuy, 3000);
+        _fakeBuyTimer = setInterval(_showFakeBuy, 12000);
+    }
+    function stopFakeBuy() {
+        if (_fakeBuyTimer) { clearInterval(_fakeBuyTimer); _fakeBuyTimer = null; }
+        var el = document.getElementById('q-fakebuy'); if (el) el.classList.remove('show');
+    }
+
+    // Parcelamento — o MESMO da pagina: pega a MAIOR parcela do produto ("em ate Nx de R$ X").
+    // Le do data-variants (mesma fonte do preco). installments_data vem como STRING JSON aninhada.
+    function getInstallment() {
+        var dv = document.querySelector('[data-variants]');
+        if (!dv) return '';
+        try {
+            var v = JSON.parse(dv.getAttribute('data-variants'))[0];
+            var idata = v.installments_data;
+            if (!idata) return '';
+            if (typeof idata === 'string') idata = JSON.parse(idata);
+            var plans = idata[Object.keys(idata)[0]];
+            if (!plans) return '';
+            var best = null;
+            Object.keys(plans).forEach(function (k) {
+                var n = parseInt(k, 10);
+                var p = plans[k];
+                if (n >= 2 && p.installment_value > 0) {
+                    var free = p.without_interests === true;
+                    if (!best || (free && !best.free) || (free === best.free && n > best.n)) best = { n: n, val: p.installment_value, free: free };
+                }
+            });
+            if (best) return best.n + 'x de R$ ' + Number(best.val).toFixed(2).replace('.', ',');
+        } catch (e) {}
+        return '';
+    }
+
+    function populateBuyCta() {
+        var btn = document.getElementById('q-btn-buy-now');
+        var trust = document.getElementById('q-seals');
+        if (!btn) return;
+        // Nome + valor do produto acima do botão
+        var price = getMainPrice();
+        var prodName = plProductName();
+        var info = document.getElementById('q-result-prodinfo');
+        var nameEl = document.getElementById('q-result-prodname');
+        var priceEl = document.getElementById('q-result-prodprice');
+        if (nameEl) nameEl.textContent = (prodName || '').trim();
+        if (priceEl) priceEl.textContent = price || '';
+        var instEl = document.getElementById('q-result-installment');
+        if (instEl) { var _inst = getInstallment(); instEl.textContent = _inst; instEl.style.display = _inst ? 'block' : 'none'; }
+        if (info && ((prodName || '').trim() || price)) info.style.display = 'block';
+        // Escassez
+        var sc = document.getElementById('q-scarcity');
+        var scn = document.getElementById('q-scarcity-n');
+        if (sc && scn && (prodName || '').trim()) { scn.textContent = scarcityCount(prodName); sc.style.display = 'flex'; }
+        // Notificações de compra: desativadas em todos os provadores
+        btn.style.display = 'flex';
+        if (trust) trust.style.display = 'flex';
+        btn.onclick = buyNow;
+    }
+
+
+    // ─── INIT ─────────────────────────────────────────────────────────────────────
+
+
+    function init() {
+        // --- FILTRO DE CATEGORIA (HAT) ---
+        const productNameNormalized = (document.querySelector('h1.product-title,h1.product-detail-info-name,h1.product__title,.product-single__title')?.innerText || document.title).toUpperCase();
+        if (productNameNormalized.includes('HAT')) {
+            return;
+        }
+
+        // --- LENTE NAO PROVA: o provador so vale para armacao ---
+        // Nao dá para barrar por "LENTE" solto: armacao com clip-on tem o nome
+        // "Armacao ... clip on lente marrom degrade". Todo produto de lente da loja
+        // comeca com "PAR DE LENTES" (24/24 conferidos na loja em 19/07/2026),
+        // e o slug da URL segue o mesmo padrao.
+        var ehLente = /^\s*PAR DE LENTES/.test(productNameNormalized)
+                   || /\/produto\/par-de-lentes/i.test(location.pathname);
+        if (ehLente) {
+            return;
+        }
+
+        // Fontes (async, não bloqueia render)
+
+        // Phosphor Icons — carregado lazily na primeira abertura do modal
+        // (não carrega na init para não impactar o tempo de carregamento da página)
+
+        const styleTag = document.createElement('style');
+        styleTag.textContent = styles;
+        document.head.appendChild(styleTag);
+
+        const modalContainer = document.createElement('div');
+        modalContainer.innerHTML = html;
+        document.body.appendChild(modalContainer);
+
+        // Usa a MESMA FONTE da loja no provador (em vez de Bebas Neue / DM Sans)
+        try {
+            var _bodyF = getComputedStyle(document.body).fontFamily;
+            var _h = document.querySelector('h1.product__title,.product-single__title,h1,h2');
+            var _headF = _h ? getComputedStyle(_h).fontFamily : _bodyF;
+            var _root = document.documentElement;
+            if (_bodyF) _root.style.setProperty('--font-body', _bodyF);
+            if (_headF) _root.style.setProperty('--font-display', _headF);
+        } catch (e) {}
+
+
+        // ── Botão imagem PNG ──
+        const openBtn = document.createElement('button');
+        openBtn.className = 'q-btn-trigger-ia';
+        openBtn.id = 'q-open-ia';
+        openBtn.setAttribute('aria-label', 'Abrir Provador Virtual');
+        openBtn.innerHTML = stampImageHTML;
+
+
+        const imgContainers = ['.product-image.product-principal', '.product-zoom__images.product-principal', '.product-image', '.js-product-slide', '.product-image-column', '.js-swiper-product', '[data-store^="product-image-"]', '.product__media-wrapper', '.product-gallery__media', '.product__media', '.product-image-main', '.product-media-container', '[data-media-id]', '.product__media-item', '.product-gallery', '.product-single__media', '.media-gallery'];
+
+        // A FBITS (e outros temas) usam carrossel slick que RECONSTRÓI a track nas trocas de
+        // foto/variante e engole o botão (que sumia até recarregar a página). Se o container
+        // escolhido é/está dentro de um slick, ancoramos no PAI do slick (estável, fora da
+        // track) — assim o rebuild da track não remove o selo.
+        function stableTriggerAnchor(el) {
+            try {
+                const slick = el.closest && el.closest('.slick-slider, .slick-initialized, .slick-list, .slick-track');
+                if (slick && slick.parentElement) return slick.parentElement;
+                const inner = el.querySelector && el.querySelector('.slick-slider, .slick-initialized');
+                if (inner && inner.parentElement && inner.parentElement !== el) return inner.parentElement;
+            } catch (e) {}
+            return el;
+        }
+        function placeTriggerIn(el) {
+            const anchor = stableTriggerAnchor(el);
+            if (window.getComputedStyle(anchor).position === 'static') anchor.style.position = 'relative';
+            anchor.appendChild(openBtn);
+        }
+        function tryPlaceTriggerBtn() {
+            // 1ª prioridade: container que tenha <img> dentro (evita cair em slide de vídeo)
+            for (const sel of imgContainers) {
+                const els = document.querySelectorAll(sel);
+                for (const el of els) {
+                    if (el.querySelector('img')) { placeTriggerIn(el); return true; }
+                }
+            }
+            // 2ª prioridade: qualquer container correspondente
+            for (const sel of imgContainers) {
+                const el = document.querySelector(sel);
+                if (el) { placeTriggerIn(el); return true; }
+            }
+            return false;
+        }
+
+        tryPlaceTriggerBtn();
+
+        // Watchdog permanente: Nuvemshop pode re-renderizar em SPA nav ou variantes.
+        // Re-anexa o botão se ele sair do DOM ou ficar invisível.
+        // Só reanexa se o botão SAIU do DOM (re-render de SPA). NÃO mede rect e NÃO faz
+        // remove()+reanexar por 0x0 — isso causava loop infinito (o reanexar dispara o
+        // observer, que reanexa de novo) + reflow a cada mutação. O observer é debounced
+        // via requestAnimationFrame pra coalescer rajadas de mutação numa checagem barata.
+        function ensureTriggerAttached() {
+            // Ativação controlada: fora do produto permitido, garante que o botão NÃO exista
+            // (em SPA nav o container troca e o watchdog reanexaria em qualquer produto).
+            if (!isAllowedProduct()) { try { openBtn.remove(); } catch (_) {} return; }
+            // Re-ancora se saiu do DOM OU se o slick puxou o botão pra dentro da track/clone
+            // (nesse caso ele some visualmente na troca de foto/variante).
+            let drifted = false;
+            try { drifted = !!(openBtn.closest && openBtn.closest('.slick-track, .slick-list, .slick-cloned')); } catch (e) {}
+            if (!openBtn.isConnected || drifted) { try { openBtn.remove(); } catch (_) {} tryPlaceTriggerBtn(); }
+        }
+        let _trigPending = false;
+        const triggerWatchdog = new MutationObserver(() => {
+            if (_trigPending) return;
+            _trigPending = true;
+            requestAnimationFrame(() => { _trigPending = false; ensureTriggerAttached(); });
+        });
+        triggerWatchdog.observe(document.body, { childList: true, subtree: true });
+        setInterval(ensureTriggerAttached, 2000);
+
+
+        const modal = document.getElementById('q-modal-ia');
+
+        // ── Botão inline abaixo do botão de compra (ação secundária) ──
+        const inlineBtn = document.createElement('button');
+        inlineBtn.className = 'q-btn-inline-provador';
+        inlineBtn.type = 'button';
+
+        const inlineSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        inlineSvg.setAttribute('viewBox', '0 0 24 24');
+        inlineSvg.setAttribute('fill', 'none');
+        inlineSvg.setAttribute('stroke', 'currentColor');
+        inlineSvg.setAttribute('stroke-width', '1.5');
+        inlineSvg.setAttribute('stroke-linecap', 'round');
+        inlineSvg.setAttribute('stroke-linejoin', 'round');
+        const path1 = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path1.setAttribute('d', 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2');
+        const circle1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle1.setAttribute('cx', '12');
+        circle1.setAttribute('cy', '7');
+        circle1.setAttribute('r', '4');
+        inlineSvg.appendChild(path1);
+        inlineSvg.appendChild(circle1);
+        inlineBtn.appendChild(inlineSvg);
+
+        const inlineBtnText = document.createTextNode('Provador Virtual');
+        inlineBtn.appendChild(inlineBtnText);
+
+        inlineBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const prodName = plProductName();
+            applyProduct(detectProduct(prodName));
+            populateImageSelector();
+            openModal();
+        });
+
+        // Posiciona abaixo do botão de compra
+        function tryPlaceInlineBtn() {
+            const buyBtn = document.querySelector('button.product-buy:not(#product-buy-floating), button.product-buy, .js-addtocart, .btn-add-to-cart, [data-component="product.add-to-cart"]');
+            if (buyBtn) {
+                const parent = buyBtn.parentNode;
+                // Na FBITS o "Comprar" fica numa linha grid/flex (ex: quantidade | comprar, o
+                // container .product-buttons é display:grid). Injetar o provador como IRMÃO vira
+                // uma célula extra que quebra o grid (empurra/espreme o botão de compra). Se o pai
+                // é grid/flex, colocamos o botão DEPOIS do container inteiro (linha própria abaixo).
+                let pd = '';
+                try { pd = parent ? getComputedStyle(parent).display : ''; } catch (_) {}
+                if ((pd === 'grid' || pd === 'inline-grid' || pd === 'flex' || pd === 'inline-flex') && parent.parentNode) {
+                    parent.parentNode.insertBefore(inlineBtn, parent.nextSibling);
+                } else {
+                    parent.insertBefore(inlineBtn, buyBtn.nextSibling);
+                }
+                return true;
+            }
+            const variantsContainer = document.querySelector('.js-product-variants');
+            if (variantsContainer) {
+                variantsContainer.parentNode.insertBefore(inlineBtn, variantsContainer.nextSibling);
+                return true;
+            }
+            return false;
+        }
+        tryPlaceInlineBtn();
+
+        // Watchdog permanente também pro botão inline
+        function ensureInlineAttached() {
+            if (!isAllowedProduct()) { try { inlineBtn.remove(); } catch (_) {} return; }
+            if (!inlineBtn.isConnected) tryPlaceInlineBtn();
+        }
+        let _inlinePending = false;
+        const inlineWatchdog = new MutationObserver(() => {
+            if (_inlinePending) return;
+            _inlinePending = true;
+            requestAnimationFrame(() => { _inlinePending = false; ensureInlineAttached(); });
+        });
+        inlineWatchdog.observe(document.body, { childList: true, subtree: true });
+        setInterval(ensureInlineAttached, 2000);
+        const genBtn      = document.getElementById('q-btn-generate');
+        const nextBtn     = null; // single-step flow — no next button
+        const phoneStep   = null;
+        const photoStep   = document.getElementById('q-step-photo');
+        const uploadStep  = photoStep; // alias for PIX/error refs
+
+        const closeBtn    = document.getElementById('q-close-btn');
+        const backBtn     = document.getElementById('q-btn-back');
+        const retryBtn    = document.getElementById('q-retry-btn');
+        const cameraInput = document.getElementById('q-camera-input');
+        const galleryInput= document.getElementById('q-gallery-input');
+        const phoneInput  = document.getElementById('q-phone');
+
+        // ── Pré-preenche último número usado (localStorage) ──
+        const _PL_LAST_PHONE = 'pl_last_phone';
+        try {
+            const saved = localStorage.getItem(_PL_LAST_PHONE);
+            if (saved && /^\d{10,11}$/.test(saved)) {
+                const m = saved.match(/(\d{2})(\d{4,5})(\d{4})/);
+                if (m) phoneInput.value = '(' + m[1] + ') ' + m[2] + '-' + m[3];
+            }
+        } catch (_) {}
+        function _savePhoneIfValid() {
+            const nums = phoneInput.value.replace(/\D/g, '');
+            if (/^\d{10,11}$/.test(nums)) {
+                try { localStorage.setItem(_PL_LAST_PHONE, nums); } catch (_) {}
+            }
+        }
+        phoneInput.addEventListener('blur', _savePhoneIfValid);
+        const preImg      = document.getElementById('q-pre-img');
+        const facePlaceholder = document.getElementById('q-face-placeholder');
+
+        // keep realInput alias so PIX code still works
+        const realInput   = galleryInput;
+
+        let userPhoto = null;
+        let pixPaymentId = null;
+        let selectedProductImgUrl = '';
+
+        // Upgrade Nuvemshop CDN URLs to 1024px version
+        function upgradeImgUrl(url) {
+            if (url.includes('mitiendanube.com') || url.includes('nuvemshop.com')) {
+                return url.replace(/-\d+-\d+\.webp/, '-1024-1024.webp');
+            }
+            // ⚠️ FBITS: NAO reescrever w/h. Testado em 31/07 — a MESMA URL retorna FOTOS
+            // DIFERENTES conforme o tamanho pedido (ex.: 278748-3.jpg em ?w=256&h=256 e' uma
+            // modelo, e em ?w=1280&h=1600 e' OUTRA). Ampliar por parametro trocaria a foto do
+            // produto. Na FBITS usamos apenas URLs que a propria pagina serve (ver plPickFbits).
+            return url;
+        }
+
+        function extractImages() {
+            const containersSelectors = '.product-image.product-principal, .product-zoom__images.product-principal, .product-image, .js-product-slide, .product-image-column, .js-swiper-product, [data-store^="product-image-"], .product__media-wrapper, .product-gallery__media, .product__media, .product-image-main, .product-media-container, [data-media-id], .product__media-item, .product-gallery, .product-single__media, .media-gallery, [data-component="product.gallery"], .swiper-slide:not(.swiper-slide-duplicate), .slider-wrapper';
+            const possibleContainers = Array.from(document.querySelectorAll(containersSelectors));
+            let imgEls = [];
+            possibleContainers.forEach(c => {
+                if (!c.closest('#q-modal-ia')) {
+                    const foundImgs = c.querySelectorAll('img');
+                    imgEls.push(...Array.from(foundImgs));
+                }
+            });
+            let uniqueImgs = [];
+            imgEls.forEach(img => {
+                let src = img.dataset?.src || img.getAttribute('data-src') || img.src;
+
+                if (src && src.includes('data:image')) {
+                    const parentA = img.closest('a');
+                    if (parentA && parentA.href && !parentA.href.includes('javascript:')) {
+                        src = (/\.(jpe?g|png|webp|gif|avif)(\?|#|$)/i.test(parentA.href) ? parentA.href : '');
+                    } else if (img.getAttribute('data-srcset')) {
+                        src = img.getAttribute('data-srcset').split(',')[0].trim().split(' ')[0];
+                    }
+                }
+
+                if (!src || src.includes('data:image')) return;
+
+                const lowerSrc = src.toLowerCase();
+                const invalidKeywords = ['provador', 'logo', 'provoulevou', 'icon', 'play', 'video', 'transparent', 'placeholder', 'blank', 'spacer'];
+                if (invalidKeywords.some(kw => lowerSrc.includes(kw))) return;
+
+                // Filter out tiny images (1x1 pixels, spacers, etc.)
+                if (img.naturalWidth > 0 && img.naturalWidth < 50) return;
+                if (img.naturalHeight > 0 && img.naturalHeight < 50) return;
+
+                let cleanSrc = src.split('?')[0].replace(/-\d+-\d+\.webp|_\d+x\d+/, '');
+
+                // Upgrade to 1024px version
+                src = upgradeImgUrl(src);
+
+                if (!uniqueImgs.some(u => u.split('?')[0].replace(/-\d+-\d+\.webp|_\d+x\d+/, '') === cleanSrc)) {
+                    uniqueImgs.push(src);
+                }
+            });
+            // FBITS (Menina Flor): mantém só as imagens do SKU-alvo (variante marcada ou página
+            // atual) e descarta miniaturas de OUTRAS cores/modelos — senão o gerador recebia o
+            // modelo errado (ex.: swatch "preto" na página "rose"). og:image = foto principal do SKU.
+            try {
+                var _target = plTargetSku();
+                var _og = document.querySelector('meta[property="og:image"]')?.content || '';
+                var _ogFolder = (_og.match(/\/img\/p\/([^/]+)\//) || [])[1] || '';
+                var _pool = uniqueImgs.slice();
+                // FBITS: varre TODAS as <img> da pagina pelo SKU-alvo. Os seletores de
+                // container nao cobrem todos os temas (a Silvia usa .product-image__item, que
+                // NAO casa com .product-image) — sem isso a galeria do produto nao era achada
+                // e sobrava foto de OUTRO produto (carrossel de vitrine). Filtrar pelo SKU e'
+                // nativo da plataforma e imune a mudanca de CSS.
+                if (_target) {
+                    var _daPag = [];
+                    document.querySelectorAll('img').forEach(function (im) {
+                        var s = (im.dataset && im.dataset.src) || im.getAttribute('data-src') || im.src || '';
+                        if (s && !s.includes('data:image') && s.indexOf('/img/p/' + _target + '/') !== -1) _daPag.push(s);
+                    });
+                    _daPag.forEach(function (u) {
+                        if (!_pool.some(function (x) { return x.split('?')[0] === u.split('?')[0]; })) _pool.push(u);
+                    });
+                }
+                if (_ogFolder && _target && _ogFolder === _target) {
+                    // A og:image da FBITS vem em ?w=256&h=256 e, NESSE tamanho, o CDN devolve
+                    // OUTRA foto (verificado 31/07: 278748-3.jpg e' uma modelo em 256 e outra
+                    // em 1280). Como a dedup abaixo usa o caminho sem query, a og acabava
+                    // ofuscando a foto boa da galeria e o gerador recebia 256x256 (~9KB).
+                    // Solucao: usar a versao do MESMO arquivo que a PROPRIA PAGINA serve.
+                    var _ogPath = _og.split('?')[0];
+                    var _daPagina = _pool.filter(function (u) { return u.split('?')[0] === _ogPath; })[0];
+                    // so usa a og crua se a pagina nao servir esse arquivo (senao volta a miniatura)
+                    if (_daPagina) _pool.unshift(_daPagina);
+                }
+                if (_target) {
+                    var _seen = {}, _out = [];
+                    _pool.filter(function (u) { return u.indexOf('/img/p/' + _target + '/') !== -1; })
+                        .forEach(function (u) { var k = u.split('?')[0]; if (!_seen[k]) { _seen[k] = 1; _out.push(u); } });
+                    if (_out.length) return _out.slice(0, 4);
+                }
+            } catch (e) {}
+            if (uniqueImgs.length === 0) {
+                const og = document.querySelector('meta[property="og:image"]')?.content;
+                if (og) uniqueImgs.push(upgradeImgUrl(og));
+            }
+            return uniqueImgs.slice(0, 4);
+        }
+
+        function populateImageSelector() {
+            const imgs = extractImages();
+            const group = document.getElementById('q-photo-selector-group');
+            if (group) group.style.display = 'none';
+            selectedProductImgUrl = imgs[0] || '';
+        }
+
+        // -- Tracking de abertura do provador (session anonima) - Provou Levou --
+        var WEBHOOK_OPEN_PL = 'https://n8n.segredosdodrop.com/webhook/pl-provador-open';
+        function plSid() { try { var s = localStorage.getItem('pl_sid'); if (!s) { s = 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); localStorage.setItem('pl_sid', s); } return s; } catch (e) { return 'nostore'; } }
+        function plTrackOpen() { try { fetch(WEBHOOK_OPEN_PL, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: plSid(), origin: location.origin, produto: (document.querySelector('h1.product-name, h1.product__title, .product-single__title, h1') || {}).innerText || document.title || '' }) }).catch(function () {}); } catch (e) {} }
+        function plTrackProved(rawPhone) { try { var d = (rawPhone || '').replace(/\D/g, ''); if (d.length > 11 && d.slice(0, 2) === '55') d = d.slice(2); fetch(WEBHOOK_OPEN_PL, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: plSid(), proved: true, telefone_cliente: d || null }) }).catch(function () {}); } catch (e) {} }
+        // ── Detecção de rosto: foto do óculos no rosto vira a referência principal ──
+        // Roda no navegador (FaceDetector nativo do Chromium; fallback MediaPipe via CDN).
+        // Varre a galeria do produto (extractImages) e coleta as fotos com rosto. Fallback
+        // seguro: se nada detectar ou der erro, mantém as fotos default — sem regressão.
+        var faceDetectPromise = null, _faceUrls = [], _faceDet = null, _faceDetTried = false;
+        async function getFaceDetector() {
+            if (_faceDetTried) return _faceDet;
+            _faceDetTried = true;
+            try {
+                if ('FaceDetector' in window) { _faceDet = { native: new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 }) }; return _faceDet; }
+            } catch (e) {}
+            try {
+                var vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs');
+                var fileset = await vision.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm');
+                var det = await vision.FaceDetector.createFromOptions(fileset, {
+                    baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite' },
+                    runningMode: 'IMAGE'
+                });
+                _faceDet = { mp: det };
+            } catch (e) { _faceDet = null; }
+            return _faceDet;
+        }
+        function _plLoadCorsImg(url) {
+            return new Promise(function (resolve) {
+                var img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = function () { resolve(img); };
+                img.onerror = function () { resolve(null); };
+                img.src = url;
+            });
+        }
+        async function _plImgHasFace(det, img) {
+            try {
+                if (det.native) { var f = await det.native.detect(img); return !!(f && f.length); }
+                if (det.mp) { var r = det.mp.detect(img); return !!(r && r.detections && r.detections.length); }
+            } catch (e) {}
+            return false;
+        }
+        async function _plDetectFaces(urls) {
+            if (!urls || !urls.length) return _faceUrls;
+            var det = await getFaceDetector();
+            if (!det) return _faceUrls;
+            // Teto 6 (era 4) e igual ao de envio: como agora só as fotos no rosto vão pro
+            // gerador, parar em 4 podia descartar justamente a de lente transparente.
+            for (var i = 0; i < urls.length && _faceUrls.length < 6; i++) {
+                var img = await _plLoadCorsImg(urls[i]);
+                if (!img) continue;
+                if (await _plImgHasFace(det, img)) _faceUrls.push(urls[i]);
+            }
+            return _faceUrls;
+        }
+        function startFaceDetect() {
+            if (faceDetectPromise) return faceDetectPromise;
+            var _urls = [];
+            try { if (typeof extractImages === 'function') _urls = extractImages().slice(0, 12); } catch (e) {}
+            faceDetectPromise = _plDetectFaces(_urls).then(function (arr) {
+                if (arr && arr.length) { try { console.log('[PL] fotos no rosto detectadas:', arr.length); } catch (e) {} }
+                return arr;
+            }).catch(function () { return _faceUrls; });
+            return faceDetectPromise;
+        }
+
+        // Contador de provas restantes: consulta o check-limit (por IP na abertura; + telefone
+        // se já digitado) e mostra "Você tem X provas grátis hoje" na tela inicial.
+        function checkProvasRestantes() {
+            var el = document.getElementById('q-provas-msg');
+            if (!el) return;
+            var ph = '';
+            try { ph = (typeof phoneInput !== 'undefined' && phoneInput && phoneInput.value) ? ('55' + phoneInput.value.replace(/\D/g, '')) : ''; } catch (e) {}
+            fetch(WEBHOOK_CHECK_LIMIT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: ph }) })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    var limit = d.limit || 3;
+                    var used = Math.max(d.phone_count || 0, d.ip_count || 0);
+                    var rem = Math.max(0, limit - used);
+                    el.classList.remove('is-warn');
+                    if (rem <= 0) { el.textContent = 'Você já usou suas ' + limit + ' provas grátis de hoje 🩷'; el.classList.add('is-warn'); }
+                    else { el.textContent = '🩷 Você tem ' + rem + (rem === 1 ? ' prova' : ' provas') + ' grátis hoje (de ' + limit + ')'; if (rem === 1) el.classList.add('is-warn'); }
+                })
+                .catch(function () {});
+        }
+        function openModal() {
+            try { startFaceDetect(); } catch (e) {}
+            plTrackOpen();
+            // Sem Phosphor Icons: a CSP da loja bloqueia unpkg.com e a lib inteira servia
+            // para 3 iconezinhos — agora sao SVG inline, sem dependencia externa.
+            modal.style.display = 'flex';
+            lockBodyScroll();
+            // Mostra contador imediatamente (só por IP) ao abrir o modal
+            try { checkProvasRestantes(); } catch (e) {}
+        }
+
+
+        function closeModal() {
+            modal.style.display = 'none';
+            unlockBodyScroll();
+            try { stopFakeBuy(); } catch (e) {}
+        
+            // --- volta pra tela inicial ao fechar (pos-prova) + limpa input p/ 2a foto enviar ---
+            try {
+                var _qsr = document.getElementById('q-step-result'); if (_qsr) _qsr.style.display = 'none';
+                var _qsp = (typeof photoStep !== 'undefined' && photoStep) ? photoStep : document.getElementById('q-step-photo');
+                if (_qsp) _qsp.style.display = 'flex';
+                var _qcard = document.querySelector('.q-card-ia'); if (_qcard) _qcard.classList.remove('is-result');
+                if (typeof userPhoto !== 'undefined') userPhoto = null;
+                if (typeof pixPaymentId !== 'undefined') pixPaymentId = null;
+                if (typeof preImg !== 'undefined' && preImg) preImg.style.display = 'none';
+                if (typeof facePlaceholder !== 'undefined' && facePlaceholder) facePlaceholder.style.display = 'flex';
+                try { if (typeof cameraInput !== 'undefined' && cameraInput) cameraInput.value = ''; if (typeof galleryInput !== 'undefined' && galleryInput) galleryInput.value = ''; } catch (e) {}
+                if (typeof checkFields === 'function') checkFields();
+            } catch (e) {}
+        }
+
+        /* ── Fechar sem perder a foto ──────────────────────────────────────
+           Fechar o provador depois de provar resetava tudo e a foto gerada
+           sumia. Agora o resultado fica guardado: ao reabrir pelo selo ou
+           pelo botao, o cliente volta direto na foto dele.
+           Como a tela de resultado nao tinha saida (o #q-retry-btn e lido no
+           JS mas nunca existiu no HTML), adicionamos "Provar outra foto" --
+           sem isso o cliente ficaria preso no resultado. */
+        function _plTemResultado() {
+            var i = document.getElementById('q-final-view-img');
+            return !!(i && i.getAttribute('src'));
+        }
+
+        function _plNovaProva() {
+            var img = document.getElementById('q-final-view-img');
+            if (img) img.removeAttribute('src');
+            var s = document.getElementById('q-step-result');
+            if (s) s.style.display = 'none';
+            var p = document.getElementById('q-step-photo');
+            if (p) p.style.display = 'flex';
+            var c = document.querySelector('.q-card-ia');
+            if (c) c.classList.remove('is-result');
+            try { if (typeof userPhoto !== 'undefined') userPhoto = null; } catch (e) {}
+            try { if (typeof pixPaymentId !== 'undefined') pixPaymentId = null; } catch (e) {}
+            try { if (typeof preImg !== 'undefined' && preImg) preImg.style.display = 'none'; } catch (e) {}
+            try { if (typeof facePlaceholder !== 'undefined' && facePlaceholder) facePlaceholder.style.display = 'flex'; } catch (e) {}
+            try { if (typeof cameraInput !== 'undefined' && cameraInput) cameraInput.value = ''; } catch (e) {}
+            try { if (typeof galleryInput !== 'undefined' && galleryInput) galleryInput.value = ''; } catch (e) {}
+            try { if (typeof checkFields === 'function') checkFields(); } catch (e) {}
+        }
+
+        function _plMontaBotaoNovaProva() {
+            var col = document.getElementById('q-result-actions-col');
+            if (!col || document.getElementById('q-btn-nova-prova')) return;
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.id = 'q-btn-nova-prova';
+            b.className = 'q-btn-outline';
+            b.textContent = 'Provar outra foto';
+            b.style.marginTop = '10px';
+            b.onclick = _plNovaProva;
+            col.appendChild(b);
+        }
+
+        var _plCloseOriginal = closeModal;
+        closeModal = function () {
+            if (_plTemResultado()) {
+                try { modal.style.display = 'none'; } catch (e) {}
+                try { unlockBodyScroll(); } catch (e) {}
+                try { stopFakeBuy(); } catch (e) {}
+                return;
+            }
+            return _plCloseOriginal.apply(this, arguments);
+        };
+
+        var _plOpenOriginal = openModal;
+        openModal = function () {
+            var _r = _plOpenOriginal.apply(this, arguments);
+            try {
+                _plMontaBotaoNovaProva();
+                if (_plTemResultado()) {
+                    ['q-step-photo', 'q-loading-box', 'q-step-error'].forEach(function (id) {
+                        var el = document.getElementById(id);
+                        if (el) el.style.display = 'none';
+                    });
+                    var s = document.getElementById('q-step-result');
+                    if (s) s.style.display = 'flex';
+                    var c = document.querySelector('.q-card-ia');
+                    if (c) c.classList.add('is-result');
+                }
+            } catch (e) {}
+            return _r;
+        };
+
+
+
+        function applyProduct(product) {
+            currentProduct = product;
+        }
+
+
+        openBtn.onclick = (e) => {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            const prodName = plProductName();
+            applyProduct(detectProduct(prodName));
+            populateImageSelector();
+            openModal();
+        };
+
+
+        closeBtn.onclick = () => closeModal();
+        if (backBtn) backBtn.onclick = () => closeModal();
+
+
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+
+
+        if (retryBtn) retryBtn.onclick = () => {
+            try { if (typeof cameraInput !== 'undefined' && cameraInput) cameraInput.value = ''; if (typeof galleryInput !== 'undefined' && galleryInput) galleryInput.value = ''; } catch (e) {}
+            document.getElementById('q-step-result').style.display = 'none';
+            photoStep.style.display = 'flex';
+            document.querySelector('.q-card-ia').classList.remove('is-result');
+            userPhoto = null;
+            pixPaymentId = null;
+            preImg.style.display = 'none';
+            if (facePlaceholder) facePlaceholder.style.display = 'flex';
+            checkFields();
+        };
+
+        // Camera / gallery buttons
+        document.getElementById('q-btn-camera').onclick = function() { cameraInput.click(); };
+        document.getElementById('q-btn-gallery').onclick = function() { galleryInput.click(); };
+        document.getElementById('q-face-frame').onclick = function() { galleryInput.click(); };
+
+        function loadRelatedProducts() {
+            var grid = document.getElementById('q-related-grid');
+            var section = document.getElementById('q-related-products');
+            if (!grid || !section) return;
+
+            var items = document.querySelectorAll('.js-swiper-related .js-item-product');
+            if (!items.length) items = document.querySelectorAll('.js-item-product');
+            var products = [];
+
+            items.forEach(function(item) {
+                if (products.length >= 3) return;
+                var container = item.querySelector('[data-variants]');
+                if (!container) return;
+                try {
+                    var variants = JSON.parse(container.getAttribute('data-variants'));
+                    if (!variants || !variants.length) return;
+                    var v = variants[0];
+                    var imgRaw = v.image_url || '';
+                    var img = imgRaw ? 'https:' + imgRaw.replace(/\\/g, '').replace('-1024-1024.webp', '-480-0.webp') : '';
+                    var price = v.price_short || '';
+                    // Name from img alt (Nuvemshop sets it reliably)
+                    var imgEl = item.querySelector('img[alt]');
+                    var name = imgEl ? imgEl.getAttribute('alt').trim() : '';
+                    // Link from any anchor pointing to /produtos/
+                    var linkEl = item.querySelector('a[href*="/produtos/"]');
+                    var link = linkEl ? linkEl.getAttribute('href') : '';
+                    if (img && (name || price)) {
+                        products.push({ name: name, img: img, price: price, link: link });
+                    }
+                } catch(e) {}
+            });
+
+            if (!products.length) return;
+
+            while (grid.firstChild) grid.removeChild(grid.firstChild);
+            products.forEach(function(p) {
+                var a = document.createElement('a');
+                a.className = 'q-related-card';
+                a.href = p.link || '#';
+                a.target = '_blank';
+                var img = document.createElement('img');
+                img.src = p.img;
+                img.alt = p.name;
+                img.loading = 'lazy';
+                var nameEl = document.createElement('span');
+                nameEl.className = 'q-related-card-name';
+                nameEl.textContent = p.name;
+                a.appendChild(img);
+                a.appendChild(nameEl);
+                grid.appendChild(a);
+            });
+            section.style.display = 'block';
+        }
+
+        // ── Barra de progresso simulada (não há evento real de progresso do backend).
+        // Desacelera perto de 92% e se auto-encerra sozinha quando a tela de loading
+        // for escondida (sucesso, erro ou limite) — não precisa de hook em cada saída. ──
+        var _qProgressTimer = null;
+        function startLoadingProgress() {
+            if (_qProgressTimer) { clearInterval(_qProgressTimer); _qProgressTimer = null; }
+            var lb = document.getElementById('q-loading-box');
+            var bar = lb ? lb.querySelector('.q-loading-bar > div') : null;
+            if (!lb || !bar) return;
+            bar.style.transition = 'none';
+            bar.style.transform = 'scaleX(0)';
+            void bar.offsetWidth;
+            bar.style.transition = 'transform 0.3s ease-out';
+            var progress = 0;
+            _qProgressTimer = setInterval(function () {
+                if (lb.style.display !== 'flex') { clearInterval(_qProgressTimer); _qProgressTimer = null; return; }
+                var remaining = 92 - progress;
+                progress += Math.max(remaining * 0.06, 0.15);
+                if (progress > 92) progress = 92;
+                bar.style.transform = 'scaleX(' + (progress / 100) + ')';
+            }, 200);
+        }
+
+        function showError() {
+            var lb = document.getElementById('q-loading-box');
+            var su = photoStep;
+            var se = document.getElementById('q-step-error');
+            if (lb) lb.style.display = 'none';
+            if (su) su.style.display = 'none';
+            if (se) se.style.display = 'flex';
+        }
+        var _eb = document.getElementById('q-error-back'); if (_eb) _eb.onclick = function() { closeModal(); };
+
+
+
+        phoneInput.addEventListener('input', function (e) {
+            let x = e.target.value.replace(/\D/g, '').match(/(\d{0,2})(\d{0,5})(\d{0,4})/);
+            e.target.value = !x[2] ? x[1] : '(' + x[1] + ') ' + x[2] + (x[3] ? '-' + x[3] : '');
+            checkPhoneStep();
+        });
+
+
+
+        function flashError(targetEl, hintMsg) {
+            var hint = document.getElementById('q-validation-hint');
+            if (hint) {
+                hint.textContent = '\u26A0\uFE0F ' + hintMsg;
+                hint.classList.add('is-visible');
+            }
+            if (targetEl) {
+                targetEl.classList.add('is-error', 'q-shake');
+                setTimeout(function(){ targetEl.classList.remove('q-shake'); }, 600);
+                try { targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+                if (targetEl.focus) setTimeout(function(){ targetEl.focus(); }, 350);
+            }
+        }
+        function checkPhoneStep() {
+            const nums = phoneInput.value.replace(/\D/g, '');
+            const phoneOk = isValidBRPhone(nums);
+            document.getElementById('q-phone-error').style.display = (phoneInput.value.length > 0 && !phoneOk) ? 'block' : 'none';
+            phoneInput.style.borderColor = (phoneInput.value.length > 0 && !phoneOk) ? '#ef4444' : 'var(--q-border)';
+            checkFields();
+        }
+
+        function checkFields() {
+            const nums = phoneInput.value.replace(/\D/g, '');
+            const phoneOk = isValidBRPhone(nums);
+            /* aggressive validation: botão sempre clicável */
+        }
+
+        document.getElementById('q-accept-terms').onchange = checkFields;
+
+        function handlePhotoSelected(file) {
+            if (!file) return;
+            userPhoto = file;
+            const rd = new FileReader();
+            rd.onload = ev => {
+                preImg.src = ev.target.result;
+                preImg.style.display = 'block';
+                if (facePlaceholder) facePlaceholder.style.display = 'none';
+                checkFields();
+            };
+            rd.readAsDataURL(file);
+        }
+
+        cameraInput.onchange  = (e) => handlePhotoSelected(e.target.files[0]);
+        galleryInput.onchange = (e) => handlePhotoSelected(e.target.files[0]);
+
+
+        function resizeImage(fileOrBlob, maxSize) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    let w = img.width, h = img.height;
+                    if (w <= maxSize && h <= maxSize) { resolve(fileOrBlob); return; }
+                    if (w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+                    else { w = Math.round(w * maxSize / h); h = maxSize; }
+                    const c = document.createElement('canvas');
+                    c.width = w; c.height = h;
+                    c.getContext('2d').drawImage(img, 0, 0, w, h);
+                    c.toBlob(b => resolve(b), 'image/jpeg', 0.95);
+                };
+                // mesma razao da foto do resultado: `blob:` nao passa na CSP desta loja
+                const _b = fileOrBlob instanceof Blob ? fileOrBlob : new Blob([fileOrBlob]);
+                const _fr = new FileReader();
+                _fr.onload = function () { img.src = _fr.result; };
+                _fr.onerror = function () { resolve(fileOrBlob); };
+                _fr.readAsDataURL(_b);
+            });
+        }
+
+        // ── PIX: polling e controle ──
+        let pixPollingTimer = null;
+
+        function stopPixPolling() {
+            if (pixPollingTimer) { clearInterval(pixPollingTimer); pixPollingTimer = null; }
+        }
+
+        // ── Recuperacao do pagamento ──────────────────────────────────────────
+        // O PIX e pago NO APP DO BANCO: a aba do provador vai pra segundo plano
+        // e o celular suspende o setInterval. Antes, se o cliente nao voltasse
+        // pro modal ainda aberto, a prova paga nunca aparecia. Agora reconferimos
+        // sempre que ele volta pra aba ou reabre o provador.
+        let pixWatchId = null;
+
+        function pixUnlock(payment_id, phone) {
+            stopPixPolling();
+            pixWatchId = null;
+            try { if (phone) _pixClearPending(phone); } catch (_) {}
+            pixPaymentId = payment_id;
+            var _msg = document.getElementById('q-pix-status-msg');
+            if (_msg) {
+                _msg.textContent = 'Pagamento confirmado!';
+                _msg.className = 'q-pix-status q-pix-approved';
+            }
+            setTimeout(function () {
+                hidePixScreen();
+                // Se a pagina recarregou, perdemos a foto da memoria. O credito
+                // continua valendo no servidor, entao pedimos a foto de novo em
+                // vez de deixar a tela muda (era isso que o cliente via).
+                if (!userPhoto) {
+                    try {
+                        photoStep.style.display = 'flex';
+                        var h = document.getElementById('q-validation-hint');
+                        if (h) {
+                            h.textContent = '\u2705 Pagamento confirmado! Envie sua foto para gerar a prova.';
+                            h.classList.add('is-visible');
+                        }
+                    } catch (_) {}
+                    return;
+                }
+                runGeneration();
+            }, 1200);
+        }
+
+        async function pixCheck(payment_id, phone) {
+            try {
+                const sr = await fetch(WEBHOOK_PIX_STATUS + '?payment_id=' + payment_id);
+                const st = await sr.json();
+                if (st && st.status === 'approved') { pixUnlock(payment_id, phone); return true; }
+            } catch (_) {}
+            return false;
+        }
+
+        async function pixResume() {
+            let id = pixWatchId, ph = null;
+            if (!id) {
+                try {
+                    const raw = localStorage.getItem(_PIX_LS_KEY);
+                    const arr = raw ? JSON.parse(raw) : [];
+                    const now = Date.now();
+                    const p = arr.filter(function (x) { return (now - x.ts) < _PIX_TTL_MS; })[0];
+                    if (p) { id = p.payment_id; ph = p.phone; }
+                } catch (_) {}
+            }
+            if (id) await pixCheck(id, ph);
+        }
+
+        // Volta do app do banco -> reconfere na hora.
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'visible') pixResume();
+        });
+        window.addEventListener('focus', function () { pixResume(); });
+
+        function showPixScreen() {
+            uploadStep.style.display = 'none';
+            document.getElementById('q-step-pix').style.display = 'block';
+            document.getElementById('q-pix-status-msg').textContent = 'Aguardando pagamento...';
+            document.getElementById('q-pix-status-msg').className = 'q-pix-status q-pix-waiting';
+        }
+
+        function hidePixScreen() {
+            stopPixPolling();
+            document.getElementById('q-step-pix').style.display = 'none';
+        }
+
+        
+        // ── PIX pendente em localStorage (evita cobrar duas vezes) ──
+        const _PIX_LS_KEY = 'pl_pix_pending_v1';
+        const _PIX_TTL_MS = 25 * 60 * 1000; // PIX MP expira em 30min
+        function _pixLoadPending(phone) {
+            try {
+                const raw = localStorage.getItem(_PIX_LS_KEY);
+                if (!raw) return null;
+                const arr = JSON.parse(raw);
+                const now = Date.now();
+                const valid = arr.filter(p => p.phone === phone && (now - p.ts) < _PIX_TTL_MS);
+                return valid[0] || null;
+            } catch (_) { return null; }
+        }
+        function _pixSavePending(phone, payment_id, qr_code, qr_code_base64) {
+            try {
+                const raw = localStorage.getItem(_PIX_LS_KEY);
+                let arr = [];
+                try { arr = raw ? JSON.parse(raw) : []; } catch (_) {}
+                const now = Date.now();
+                arr = arr.filter(p => (now - p.ts) < _PIX_TTL_MS && p.phone !== phone);
+                arr.push({ phone, payment_id, qr_code, qr_code_base64, ts: now });
+                localStorage.setItem(_PIX_LS_KEY, JSON.stringify(arr));
+            } catch (_) {}
+        }
+        function _pixClearPending(phone) {
+            try {
+                const raw = localStorage.getItem(_PIX_LS_KEY);
+                if (!raw) return;
+                let arr = JSON.parse(raw);
+                arr = arr.filter(p => p.phone !== phone);
+                localStorage.setItem(_PIX_LS_KEY, JSON.stringify(arr));
+            } catch (_) {}
+        }
+
+        async function createPixAndPoll() {
+            /* Limite atingido → tela "suas provas de hoje acabaram, volte amanhã" (sem WhatsApp). */
+            try {
+                var _ph = document.getElementById('q-step-photo'); if (_ph) _ph.style.display = 'none';
+                var _lb = document.getElementById('q-loading-box'); if (_lb) _lb.style.display = 'none';
+                var _pix = document.getElementById('q-step-pix');
+                if (_pix) {
+                    _pix.style.display = 'flex';
+                    _pix.innerHTML =
+                        '<div style="width:72px;height:72px;border-radius:50%;background:rgba(255,86,255,0.10);border:1px solid rgba(255,86,255,0.35);display:flex;align-items:center;justify-content:center;margin:0 auto 4px;"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--c-accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="15" r="3.2"/><circle cx="18" cy="15" r="3.2"/><path d="M9.2 15c0-1.2 1.2-2 2.8-2s2.8.8 2.8 2"/><path d="M2.8 13.5 4.6 8.8a2 2 0 0 1 1.9-1.3h1.2"/><path d="M21.2 13.5 19.4 8.8a2 2 0 0 0-1.9-1.3h-1.2"/></svg></div>'
+                        + '<h2 style="text-align:center;">Suas provas de hoje acabaram!</h2>'
+                        + '<p class="q-pix-subtitle" style="text-align:center;">Você já usou suas provas gratuitas de hoje. Volte amanhã para experimentar mais modelos! 🩷</p>';
+                }
+            } catch (e) {}
+            return;
+            showPixScreen();
+            try {
+                let pix;
+
+                const _ppPhone = '55' + phoneInput.value.replace(/\D/g, '');
+
+                const pending = _pixLoadPending(_ppPhone);
+
+                if (pending) {
+
+                    pix = { payment_id: pending.payment_id, qr_code: pending.qr_code, qr_code_base64: pending.qr_code_base64 };
+
+                } else {
+
+                    const resp = await fetch(WEBHOOK_PIX, {
+
+                        method: 'POST',
+
+                        headers: { 'Content-Type': 'application/json' },
+
+                        body: JSON.stringify({ email: 'cliente@provoulevou.com.br', phone: '55' + phoneInput.value.replace(/\D/g, ''), loja: 'meninaflor', origin: location.origin })
+
+                    });
+
+                    pix = await resp.json();
+
+                    if (!pix.payment_id || !pix.qr_code) throw new Error('PIX inválido');
+
+                    _pixSavePending(_ppPhone, pix.payment_id, pix.qr_code, pix.qr_code_base64);
+
+                }
+
+                document.getElementById('q-pix-qr-img').src = 'data:image/png;base64,' + pix.qr_code_base64;
+                document.getElementById('q-pix-code').value = pix.qr_code;
+
+                // Polling a cada 3s ate o PIX expirar (30min), nao mais 5min.
+                // O reforco de verdade e o pixResume() no visibilitychange.
+                pixWatchId = pix.payment_id;
+                let attempts = 0;
+                pixPollingTimer = setInterval(function () {
+                    attempts++;
+                    if (attempts > 600) { stopPixPolling(); return; }
+                    pixCheck(pix.payment_id, _ppPhone);
+                }, 3000);
+            } catch (e) {
+                hidePixScreen();
+                uploadStep.style.display = 'block';
+                showError();
+            }
+        }
+
+        // Botão copiar PIX
+        document.getElementById('q-pix-copy-btn').onclick = () => {
+            const code = document.getElementById('q-pix-code').value;
+            navigator.clipboard.writeText(code).then(() => {
+                document.getElementById('q-pix-copy-btn').textContent = 'Copiado!';
+                setTimeout(() => { document.getElementById('q-pix-copy-btn').textContent = 'Copiar'; }, 2000);
+            });
+        };
+
+        // Botão cancelar PIX
+        document.getElementById('q-pix-cancel').onclick = () => {
+            hidePixScreen();
+            uploadStep.style.display = 'block';
+        };
+
+        // ── GERAÇÃO PRINCIPAL ──
+        async function runGeneration() {
+
+            if (runGeneration._busy) return;
+
+            runGeneration._busy = true;
+
+            try {
+                const keyToUse = window.PROVOU_LEVOU_API_KEY;
+                if (!keyToUse || keyToUse.includes("COLOQUE_A_CHAVE_AQUI")) {
+                    showError();
+                    return;
+                }
+
+                // Referencia principal = a foto do produto que a PROPRIA PAGINA serve.
+                // Lida na hora do envio (a galeria carrega lazy; no open do modal ainda podia
+                // estar vazia, e ai caia na og:image, que na FBITS e' miniatura 256x256).
+                let prodImg = '';
+                try { prodImg = extractImages()[0] || ''; } catch (e) {}
+                if (!prodImg) prodImg = selectedProductImgUrl || '';
+                const prodName = plProductName();
+
+                uploadStep.style.display = 'none';
+                document.getElementById('q-loading-box').style.display = 'flex';
+                startLoadingProgress();
+
+                try {
+                    const fd = new FormData();
+                    fd.append('person_image', userPhoto, 'person.jpg');
+                    fd.append('whatsapp', '55' + phoneInput.value.replace(/\D/g, ''));
+                    fd.append('phone_raw', phoneInput.value);
+                    fd.append('product_name', prodName);
+                    fd.append('product_url', window.location.href);
+                    fd.append('product_type', currentProduct.category);
+                    fd.append('product_fit', currentProduct.fit);
+                    fd.append('api_key', keyToUse);
+                    if (pixPaymentId) fd.append('pix_payment_id', pixPaymentId);
+
+                    if (currentProduct.category === 'top') {
+                        fd.append('height', '');
+                        fd.append('weight', '');
+                    } else {
+                        fd.append('height', '');
+                        fd.append('weight', '');
+                        fd.append('cintura', '');
+                        fd.append('quadril', '');
+                    }
+
+                    // FBITS (fbitsstatic.net) libera CORS -> baixa a foto client-side e envia em
+                    // BINÁRIO (1ª como product_image) + base64 (2ª-4ª), formato do gerador principal.
+                    let allProdImgs = [];
+                    if (prodImg) allProdImgs.push(prodImg);
+                    try {
+                        if (typeof extractImages === 'function') {
+                            const extra = extractImages();
+                            for (const u of extra) {
+                                const cleanU = String(u || '').split('?')[0];
+                                if (!allProdImgs.some(p => String(p).split('?')[0] === cleanU)) {
+                                    allProdImgs.push(u);
+                                }
+                            }
+                        }
+                    } catch (_) {}
+                    // Detecção de rosto: HAVENDO foto do óculos num rosto, manda SÓ essas.
+                    // Elas já trazem a armação vestida, na proporção certa e com a lente real —
+                    // o packshot não acrescenta e ainda atrapalha: em vários produtos ele é o
+                    // composto que mostra o clip-on SOLAR acoplado (ex.: Gabi 6121), e era daí
+                    // que a IA tirava a lente escura/leitosa.
+                    // Sem nenhum rosto detectado → mantém as fotos default (fallback, sem regressão).
+                    //
+                    // ⚠️ Antes ia só _faceUrls[0] na frente e TODOS os packshots em seguida; com o
+                    // corte em 4, as demais fotos no rosto nunca entravam. No Jasmine isso mandava
+                    // só a foto de lifestyle com a lente ESPELHADA e deixava de fora a foto no rosto
+                    // com a lente limpa (ficava na posição 11) — a IA nunca via como a lente deve
+                    // ser e inventava uma lente leitosa.
+                    // Com foto no rosto vão até 6 (o gerador lê até 20; o 4 era teto só do widget).
+                    // SEM rosto, mantém o 4 de sempre — o fallback não muda de comportamento.
+                    var _TETO = 4;
+                    try {
+                        if (faceDetectPromise) { await Promise.race([faceDetectPromise, new Promise(function (r) { setTimeout(r, 4000); })]); }
+                        if (_faceUrls && _faceUrls.length) {
+                            var _key = function (u) { return String(u || '').split('?')[0]; };
+                            var _mix = [];
+                            var _add = function (u) { if (u && !_mix.some(function (x) { return _key(x) === _key(u); })) _mix.push(u); };
+                            _faceUrls.forEach(_add);   // só as fotos no rosto (sol, transparente, etc.)
+                            allProdImgs = _mix;
+                            _TETO = 6;
+                        }
+                    } catch (e) {}
+                    allProdImgs = allProdImgs.slice(0, _TETO);
+                    console.log('[PL Menina Flor] Enviando', allProdImgs.length, 'fotos do produto (binário)');
+                    let _primaryDone = false, _slot = 1;
+                    for (let _pi = 0; _pi < allProdImgs.length; _pi++) {
+                        try {
+                            const _b = await fetch(allProdImgs[_pi]).then(r => r.blob());
+                            if (!_b || !/^image\//i.test(_b.type)) continue; // pula HTML/nao-imagem -> evita 400 do gerador (ALTA DEMANDA)
+                            if (!_primaryDone) {
+                                fd.append('product_image', _b, 'product.jpg'); _primaryDone = true;
+                            } else {
+                                _slot++;
+                                const _b64 = await new Promise((resolve, reject) => {
+                                    const _r = new FileReader();
+                                    _r.onloadend = () => resolve(_r.result.split(',')[1]);
+                                    _r.onerror = reject;
+                                    _r.readAsDataURL(_b);
+                                });
+                                fd.append('product_image_' + _slot + '_b64', _b64);
+                            }
+                        } catch (_) {}
+                    }
+
+                    calculateFinalSize();
+
+                    const res = await fetch(WEBHOOK_PROVA, { method: 'POST', body: fd });
+
+                    const contentType = res.headers.get("content-type") || "";
+                    if (contentType.includes("application/json")) {
+                        const data = await res.json();
+                        if (data.limited || data.error === 'limite_diario') {
+                            try { document.getElementById('q-loading-box').style.display = 'none'; } catch (_) {}
+                            createPixAndPoll();
+                            return;
+                        }
+                        if (data.error) {
+                            document.getElementById('q-loading-box').style.display = 'none';
+                            photoStep.style.display = 'flex';
+                            if (data.error === "Chave invalida, vencida ou inativa." || data.error.includes("vencida ou inativa")) {
+                                showError();
+                            } else {
+                                alert(data.error);
+                            }
+                            return;
+                        }
+                    }
+
+                    if (res.ok) {
+                        const blob = await res.blob();
+                        document.getElementById('q-loading-box').style.display = 'none';
+                        // data: em vez de blob: — a CSP desta loja libera `data:` no default-src
+                        // mas so aceita `blob:` em worker-src, entao a foto gerada aparecia
+                        // quebrada. Converter aqui e mais seguro do que depender da CSP deles.
+                        const _dataUrl = await new Promise(function (ok) {
+                            var fr = new FileReader();
+                            fr.onload = function () { ok(fr.result); };
+                            fr.onerror = function () { ok(''); };
+                            fr.readAsDataURL(blob);
+                        });
+                        document.getElementById('q-final-view-img').src = _dataUrl;
+                        document.querySelector('.q-card-ia').classList.add('is-result');
+                        plTrackProved((document.getElementById('q-phone') || document.getElementById('mc-phone') || document.querySelector('input[type=tel]') || {}).value);
+                        document.getElementById('q-step-result').style.display = 'flex';
+                        populateBuyCta();
+                    } else if (res.status === 401 || res.status === 403) {
+                        document.getElementById('q-loading-box').style.display = 'none';
+                        photoStep.style.display = 'flex';
+                        showError();
+                    } else { throw new Error(); }
+                } catch (e) {
+                    document.getElementById('q-loading-box').style.display = 'none';
+                    photoStep.style.display = 'flex';
+                    showError();
+                }
+        
+
+            } finally {
+
+                runGeneration._busy = false;
+
+            }
+        }
+
+        
+
+        genBtn.onclick = async () => {
+            // Validação agressiva (UI feedback)
+            var _vNums = (phoneInput.value || '').replace(/\D/g, '');
+            var _vPhoneOk = isValidBRPhone(_vNums);
+            var _vFaceFrame = document.getElementById('q-face-frame');
+            var _vTerms = document.getElementById('q-accept-terms');
+            if (!_vPhoneOk) { flashError(phoneInput, 'Preencha seu WhatsApp para continuar'); return; }
+            if (!userPhoto) { flashError(_vFaceFrame, 'Envie ou tire sua foto para continuar'); return; }
+            if (_vTerms && !_vTerms.checked) { flashError(document.querySelector('.q-terms-row'), 'Aceite os termos para continuar'); return; }
+            var _vHint = document.getElementById('q-validation-hint');
+            if (_vHint) _vHint.classList.remove('is-visible');
+            phoneInput.classList.remove('is-error');
+            if (_vFaceFrame) _vFaceFrame.classList.remove('is-error');
+
+            if (!userPhoto) return;
+
+            const phone = '55' + phoneInput.value.replace(/\D/g, '');
+            genBtn.disabled = true;
+
+            // Feedback imediato: mostra a animacao na hora; o check de limite roda enquanto ela ja aparece.
+            try { uploadStep.style.display = 'none'; } catch (_) {}
+            try { document.getElementById('q-loading-box').style.display = 'flex';
+ startLoadingProgress(); } catch (_) {}
+
+            try {
+                const resp = await fetch(WEBHOOK_CHECK_LIMIT, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone })
+                });
+                const data = await resp.json();
+                if (data.limited) {
+                    try { document.getElementById('q-loading-box').style.display = 'none'; } catch (_) {}
+                    genBtn.disabled = false;
+                    createPixAndPoll();
+                    return;
+                }
+            } catch (_) {
+                // se o check falhar, deixa gerar (evita bloquear por erro de rede)
+            }
+
+            genBtn.disabled = false;
+            runGeneration();
+        };
+    }
+
+    // ─── EXECUTA APENAS EM PÁGINAS DE PRODUTO ────────────────────────────────────
+    function detectProductPage() {
+        const path = window.location.pathname;
+        return path.includes('/products/') || path.includes('/product/') ||
+               path.includes('/produtos/') || path.includes('/produto/') ||
+               path.includes('/p/') || path.includes('preview.html') ||
+               !!document.querySelector('meta[property="og:type"][content="product"]') ||
+               !!document.querySelector('.js-product-slide') ||
+               !!document.querySelector('[data-store^="product-image-"]') ||
+               !!document.querySelector('input[name="variation_id"]');
+    }
+
+    // ─── ATIVAÇÃO CONTROLADA: provador ativo APENAS nestes produtos ──────────────
+    // A URL de produto é /p/<slug>-<id>. Casa pelo id no final do path.
+    // Para reativar em TODOS os produtos, esvazie a lista (ALLOWED_PRODUCTS = []).
+    const ALLOWED_PRODUCTS = [];   // vazio = TODOS os produtos (loja inteira)
+    function isAllowedProduct() {
+        if (!ALLOWED_PRODUCTS.length) return true;      // lista vazia = todos os produtos
+        const p = window.location.pathname;
+        return ALLOWED_PRODUCTS.some(id => p.includes(id));
+    }
+
+    // Init idempotente — pode rodar várias vezes se necessário (SPA nav, race conditions)
+    let _inited = false;
+    function maybeInit() {
+        if (_inited) return;
+        if (detectProductPage() && isAllowedProduct()) {
+            _inited = true;
+            console.log('[PL Menina Flor] init() — página de produto detectada');
+            try { init(); }
+            catch (e) { console.error('[PL Menina Flor] init falhou:', e); _inited = false; }
+        }
+    }
+
+    // Múltiplos pontos de entrada
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', maybeInit);
+    else maybeInit();
+    window.addEventListener('load', maybeInit);
+    document.addEventListener('readystatechange', maybeInit);
+
+    // SPA navigation hooks
+    window.addEventListener('popstate', () => setTimeout(maybeInit, 300));
+    ['pushState', 'replaceState'].forEach(m => {
+        const orig = history[m];
+        history[m] = function () {
+            const r = orig.apply(this, arguments);
+            setTimeout(maybeInit, 300);
+            return r;
+        };
+    });
+
+    // Polling agressivo 500ms nos primeiros 30s, depois mais leve a cada 3s
+    let _fastTicks = 0;
+    const _fastPoll = setInterval(() => {
+        maybeInit();
+        _fastTicks++;
+        if (_fastTicks > 60) clearInterval(_fastPoll);
+    }, 500);
+    setInterval(maybeInit, 3000);
+
+    // Recovery: se modal sumir do DOM, reseta _inited
+    setInterval(() => {
+        if (_inited && !document.getElementById('q-modal-ia')) {
+            console.log('[PL Menina Flor] modal desapareceu — resetando init');
+            _inited = false;
+        }
+    }, 2000);
+
+})();
