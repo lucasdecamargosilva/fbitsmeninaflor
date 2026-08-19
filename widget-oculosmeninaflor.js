@@ -1284,12 +1284,16 @@
             return url;
         }
 
-        // Fotos fixadas por produto: quando a galeria tem lente com reflexo/nevoa que
-        // embaca a geracao, fixamos manualmente a(s) referencia(s) boa(s). A URL e a MESMA
-        // versao (w/h) que a pagina serve — na FBITS o mesmo arquivo muda de foto por tamanho.
+        // Fotos fixadas por produto (validadas NO OLHO em 19/08/2026): nesses produtos a
+        // 1a foto de rosto da galeria so existe em 256px. A versao grande foi conferida
+        // visualmente antes de entrar aqui — na FBITS ampliar por URL PODE trocar a foto
+        // (ver aviso acima), entao NUNCA generalizar; so entra URL verificada.
         var PL_FOTOS_FIXAS = {
-            'matilda-2-em-1-cod-6131-animal-print-classico-c2-91973': [
-                'https://lotusoculos.fbitsstatic.net/img/p/armacao-de-oculos-de-grau-matilda-2-em-1-cod-6131-animal-print-classico-c2-91973/278543-3.jpg?w=589&h=736'
+            'matilda-0745-animal-print-91343': [
+                'https://lotusoculos.fbitsstatic.net/img/p/armacao-de-oculos-de-grau-matilda-0745-animal-print-91343/277909-7.jpg?w=589&h=736'
+            ],
+            'matilda-2-em-1-cod-0346-animal-print-padrao-listras-c3-92165': [
+                'https://lotusoculos.fbitsstatic.net/img/p/armacao-de-oculos-de-grau-matilda-2-em-1-cod-0346-animal-print-padrao-listras-c3-92165/278748-3.jpg?w=589&h=736'
             ]
         };
         function extractImages() {
