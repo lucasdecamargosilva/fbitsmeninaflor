@@ -1403,7 +1403,7 @@
         // Roda no navegador (FaceDetector nativo do Chromium; fallback MediaPipe via CDN).
         // Varre a galeria do produto (extractImages) e coleta as fotos com rosto. Fallback
         // seguro: se nada detectar ou der erro, mantém as fotos default — sem regressão.
-        var faceDetectPromise = null, _faceUrls = [], _faceDet = null, _faceDetTried = false;
+        var faceDetectPromise = null, _faceUrls = [], _faceUrlsBig = [], _faceDet = null, _faceDetTried = false;
         async function getFaceDetector() {
             if (_faceDetTried) return _faceDet;
             _faceDetTried = true;
@@ -1446,7 +1446,12 @@
             for (var i = 0; i < urls.length && _faceUrls.length < 6; i++) {
                 var img = await _plLoadCorsImg(urls[i]);
                 if (!img) continue;
-                if (await _plImgHasFace(det, img)) _faceUrls.push(urls[i]);
+                if (await _plImgHasFace(det, img)) {
+                    _faceUrls.push(urls[i]);
+                    // FBITS serve algumas fotos SO em 256px e ampliar por URL troca a foto;
+                    // entao marcamos as grandes aqui para a escolha preferir uma delas.
+                    if ((img.naturalWidth || img.width || 0) >= 400) _faceUrlsBig.push(urls[i]);
+                }
             }
             return _faceUrls;
         }
@@ -2077,12 +2082,11 @@
                     try {
                         if (faceDetectPromise) { await Promise.race([faceDetectPromise, new Promise(function (r) { setTimeout(r, 4000); })]); }
                         if (_faceUrls && _faceUrls.length) {
-                            var _key = function (u) { return String(u || '').split('?')[0]; };
-                            var _mix = [];
-                            var _add = function (u) { if (u && !_mix.some(function (x) { return _key(x) === _key(u); })) _mix.push(u); };
-                            _faceUrls.forEach(_add);   // só as fotos no rosto (sol, transparente, etc.)
-                            allProdImgs = _mix;
-                            _TETO = 6;
+                            // Regra 19/08: manda SO a PRIMEIRA foto no rosto, pulando miniatura
+                            // (<400px). Menos referencia = menos chance de herdar lente com
+                            // reflexo/nevoa de outra foto da galeria.
+                            allProdImgs = [(_faceUrlsBig[0] || _faceUrls[0])];
+                            _TETO = 1;
                         }
                     } catch (e) {}
                     allProdImgs = allProdImgs.slice(0, _TETO);
