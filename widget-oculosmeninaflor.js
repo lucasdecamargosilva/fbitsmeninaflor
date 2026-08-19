@@ -1284,7 +1284,20 @@
             return url;
         }
 
+        // Fotos fixadas por produto: quando a galeria tem lente com reflexo/nevoa que
+        // embaca a geracao, fixamos manualmente a(s) referencia(s) boa(s). A URL e a MESMA
+        // versao (w/h) que a pagina serve — na FBITS o mesmo arquivo muda de foto por tamanho.
+        var PL_FOTOS_FIXAS = {
+            'matilda-2-em-1-cod-6131-animal-print-classico-c2-91973': [
+                'https://lotusoculos.fbitsstatic.net/img/p/armacao-de-oculos-de-grau-matilda-2-em-1-cod-6131-animal-print-classico-c2-91973/278543-3.jpg?w=589&h=736'
+            ]
+        };
         function extractImages() {
+            try {
+                for (var _pk in PL_FOTOS_FIXAS) {
+                    if (location.pathname.indexOf(_pk) !== -1) return PL_FOTOS_FIXAS[_pk].slice();
+                }
+            } catch (e) {}
             const containersSelectors = '.product-image.product-principal, .product-zoom__images.product-principal, .product-image, .js-product-slide, .product-image-column, .js-swiper-product, [data-store^="product-image-"], .product__media-wrapper, .product-gallery__media, .product__media, .product-image-main, .product-media-container, [data-media-id], .product__media-item, .product-gallery, .product-single__media, .media-gallery, [data-component="product.gallery"], .swiper-slide:not(.swiper-slide-duplicate), .slider-wrapper';
             const possibleContainers = Array.from(document.querySelectorAll(containersSelectors));
             let imgEls = [];
