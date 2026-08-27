@@ -1416,10 +1416,15 @@
                 if ('FaceDetector' in window) { _faceDet = { native: new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 }) }; return _faceDet; }
             } catch (e) {}
             try {
-                var vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs');
-                var fileset = await vision.FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm');
+                // MediaPipe servido do NOSSO Pages: a CSP da loja libera github.io mas NAO
+                // libera cdn.jsdelivr.net — o import morria em silencio e a deteccao de rosto
+                // NUNCA rodava (toda prova caia no fallback e mandava packshot junto).
+                // Descoberto em 27/08/2026 na prova do LOVENA. Nao voltar pro jsdelivr.
+                var _MP = 'https://lucasdecamargosilva.github.io/fbitsmeninaflor/mediapipe';
+                var vision = await import(_MP + '/vision_bundle.mjs');
+                var fileset = await vision.FilesetResolver.forVisionTasks(_MP + '/wasm');
                 var det = await vision.FaceDetector.createFromOptions(fileset, {
-                    baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite' },
+                    baseOptions: { modelAssetPath: _MP + '/blaze_face_short_range.tflite' },
                     runningMode: 'IMAGE'
                 });
                 _faceDet = { mp: det };
