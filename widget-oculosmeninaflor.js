@@ -1295,8 +1295,26 @@
             ],
             'matilda-2-em-1-cod-0346-animal-print-padrao-listras-c3-92165': [
                 'https://lotusoculos.fbitsstatic.net/img/p/armacao-de-oculos-de-grau-matilda-2-em-1-cod-0346-animal-print-padrao-listras-c3-92165/278748-3.jpg?w=589&h=736'
+            ],
+            // Jasmine Animal print Fosco: 3 fotos no rosto escolhidas a dedo pelo Lucas
+            // (28/08/2026). Com lista fixa o widget NAO roda deteccao de rosto — vai direto,
+            // o que tambem deixa a prova mais rapida.
+            'jasmine-animal-print-fosco-88277': [
+                'https://lotusoculos.fbitsstatic.net/img/p/armacao-para-oculos-de-grau-jasmine-animal-print-fosco-88277/274759-1.jpg?w=589&h=736&v=202608191515',
+                'https://lotusoculos.fbitsstatic.net/img/p/armacao-para-oculos-de-grau-jasmine-animal-print-fosco-88277/274759-5.jpg?w=589&h=736&v=202608191515',
+                'https://lotusoculos.fbitsstatic.net/img/p/armacao-para-oculos-de-grau-jasmine-animal-print-fosco-88277/274759-8.jpg?w=589&h=736&v=202608191515'
             ]
         };
+        // Lista fixa deste produto (ou null). Usada para PULAR a deteccao de rosto e mandar
+        // exatamente estas fotos — sem isso a regra de rosto reduziria a lista para 1 foto.
+        function plFotosFixas() {
+            try {
+                for (var _k in PL_FOTOS_FIXAS) {
+                    if (location.pathname.indexOf(_k) !== -1) return PL_FOTOS_FIXAS[_k].slice();
+                }
+            } catch (e) {}
+            return null;
+        }
         function extractImages() {
             try {
                 for (var _pk in PL_FOTOS_FIXAS) {
@@ -1467,6 +1485,7 @@
         }
         function startFaceDetect() {
             if (faceDetectPromise) return faceDetectPromise;
+            if (plFotosFixas()) { faceDetectPromise = Promise.resolve([]); return faceDetectPromise; }
             var _urls = [];
             try { if (typeof extractImages === 'function') _urls = extractImages().slice(0, 12); } catch (e) {}
             faceDetectPromise = _plDetectFaces(_urls).then(function (arr) {
@@ -2089,7 +2108,9 @@
                     // Com foto no rosto vão até 6 (o gerador lê até 20; o 4 era teto só do widget).
                     // SEM rosto, mantém o 4 de sempre — o fallback não muda de comportamento.
                     var _TETO = 4;
-                    try {
+                    var _fixas = plFotosFixas();
+                    if (_fixas && _fixas.length) { allProdImgs = _fixas; _TETO = _fixas.length; }
+                    else try {
                         if (faceDetectPromise) { await Promise.race([faceDetectPromise, new Promise(function (r) { setTimeout(r, 4000); })]); }
                         if (_faceUrls && _faceUrls.length) {
                             // Regra 19/08: manda SO a PRIMEIRA foto no rosto, pulando miniatura
