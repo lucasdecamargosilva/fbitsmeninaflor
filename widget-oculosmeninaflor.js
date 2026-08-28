@@ -1299,6 +1299,24 @@
             // Jasmine Animal print Fosco: 3 fotos no rosto escolhidas a dedo pelo Lucas
             // (28/08/2026). Com lista fixa o widget NAO roda deteccao de rosto — vai direto,
             // o que tambem deixa a prova mais rapida.
+            // Jasmine Preto Fosco (5 fotos, 4 com rosto + 1 packshot escolhido pelo Lucas)
+            'jasmine-preto-fosco-88252': [
+                'https://lotusoculos.fbitsstatic.net/img/p/armacao-de-oculos-de-grau-jasmine-preto-fosco-88252/274734-2.jpg?w=589&h=736&v=202608241436',
+                'https://lotusoculos.fbitsstatic.net/img/p/armacao-de-oculos-de-grau-jasmine-preto-fosco-88252/274734-7.jpg?w=589&h=736&v=202608241436',
+                'https://lotusoculos.fbitsstatic.net/img/p/armacao-de-oculos-de-grau-jasmine-preto-fosco-88252/274734-1.jpg?w=589&h=736&v=202608241436',
+                'https://lotusoculos.fbitsstatic.net/img/p/armacao-de-oculos-de-grau-jasmine-preto-fosco-88252/274734-8.jpg?w=589&h=736&v=202608241436',
+                'https://lotusoculos.fbitsstatic.net/img/p/armacao-de-oculos-de-grau-jasmine-preto-fosco-88252/274734-6.jpg?w=589&h=736&v=202608241436'
+            ],
+            // Jasmine Preto (4 fotos, todas no rosto)
+            // ATENCAO: a chave precisa vir ANTES de 'jasmine-preto-fosco-88252'? NAO — as duas
+            // sao distintas ('...-preto-88251' x '...-preto-fosco-88252') e o match e por
+            // pathname completo, entao nao ha ambiguidade.
+            'jasmine-preto-88251': [
+                'https://lotusoculos.fbitsstatic.net/img/p/armacao-de-oculos-de-grau-jasmine-preto-88251/274733-2.jpg?w=589&h=736&v=202608121455',
+                'https://lotusoculos.fbitsstatic.net/img/p/armacao-de-oculos-de-grau-jasmine-preto-88251/274733-1.jpg?w=589&h=736&v=202608121455',
+                'https://lotusoculos.fbitsstatic.net/img/p/armacao-de-oculos-de-grau-jasmine-preto-88251/274733-8.jpg?w=589&h=736&v=202608121455',
+                'https://lotusoculos.fbitsstatic.net/img/p/armacao-de-oculos-de-grau-jasmine-preto-88251/274733-7.jpg?w=589&h=736&v=202608121455'
+            ],
             'jasmine-animal-print-fosco-88277': [
                 'https://lotusoculos.fbitsstatic.net/img/p/armacao-para-oculos-de-grau-jasmine-animal-print-fosco-88277/274759-1.jpg?w=589&h=736&v=202608191515',
                 'https://lotusoculos.fbitsstatic.net/img/p/armacao-para-oculos-de-grau-jasmine-animal-print-fosco-88277/274759-5.jpg?w=589&h=736&v=202608191515',
