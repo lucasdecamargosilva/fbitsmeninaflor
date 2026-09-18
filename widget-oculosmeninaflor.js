@@ -1070,6 +1070,12 @@
         styleTag.textContent = styles;
         document.head.appendChild(styleTag);
 
+        // Categoria MASCULINO: provador em PRETO (design). Detecta pelo nome do produto ou a URL.
+        if (productNameNormalized.includes('MASCULINO') || /masculino/i.test(location.pathname)) {
+            document.documentElement.style.setProperty('--c-accent', '#111111');
+            document.documentElement.style.setProperty('--c-accent-dark', '#000000');
+        }
+
         const modalContainer = document.createElement('div');
         modalContainer.innerHTML = html;
         document.body.appendChild(modalContainer);
