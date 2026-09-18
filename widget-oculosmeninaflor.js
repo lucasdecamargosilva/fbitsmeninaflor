@@ -257,8 +257,8 @@
         .q-provas-msg {
             font-size: 13px; margin: 2px 0 20px; letter-spacing: 0.3px;
             color: var(--c-accent-dark); font-weight: 600;
-            background: rgba(255, 86, 255, 0.08);
-            border: 1px solid rgba(255, 86, 255, 0.35);
+            background: var(--c-accent-soft, rgba(255,86,255,0.08));
+            border: 1px solid var(--c-accent-line, rgba(255,86,255,0.35));
             border-radius: 6px;
             padding: 10px 14px;
             text-align: center;
@@ -1072,8 +1072,11 @@
 
         // Categoria MASCULINO: provador em PRETO (design). Detecta pelo nome do produto ou a URL.
         if (productNameNormalized.includes('MASCULINO') || /masculino/i.test(location.pathname)) {
-            document.documentElement.style.setProperty('--c-accent', '#111111');
-            document.documentElement.style.setProperty('--c-accent-dark', '#000000');
+            var _r = document.documentElement.style;
+            _r.setProperty('--c-accent', '#111111');
+            _r.setProperty('--c-accent-dark', '#000000');
+            _r.setProperty('--c-accent-soft', 'rgba(0,0,0,0.06)');
+            _r.setProperty('--c-accent-line', 'rgba(0,0,0,0.28)');
         }
 
         const modalContainer = document.createElement('div');
@@ -1982,7 +1985,7 @@
                 if (_pix) {
                     _pix.style.display = 'flex';
                     _pix.innerHTML =
-                        '<div style="width:72px;height:72px;border-radius:50%;background:rgba(255,86,255,0.10);border:1px solid rgba(255,86,255,0.35);display:flex;align-items:center;justify-content:center;margin:0 auto 4px;"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--c-accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="15" r="3.2"/><circle cx="18" cy="15" r="3.2"/><path d="M9.2 15c0-1.2 1.2-2 2.8-2s2.8.8 2.8 2"/><path d="M2.8 13.5 4.6 8.8a2 2 0 0 1 1.9-1.3h1.2"/><path d="M21.2 13.5 19.4 8.8a2 2 0 0 0-1.9-1.3h-1.2"/></svg></div>'
+                        '<div style="width:72px;height:72px;border-radius:50%;background:var(--c-accent-soft,rgba(255,86,255,0.10));border:1px solid var(--c-accent-line,rgba(255,86,255,0.35));display:flex;align-items:center;justify-content:center;margin:0 auto 4px;"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--c-accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="15" r="3.2"/><circle cx="18" cy="15" r="3.2"/><path d="M9.2 15c0-1.2 1.2-2 2.8-2s2.8.8 2.8 2"/><path d="M2.8 13.5 4.6 8.8a2 2 0 0 1 1.9-1.3h1.2"/><path d="M21.2 13.5 19.4 8.8a2 2 0 0 0-1.9-1.3h-1.2"/></svg></div>'
                         + '<h2 style="text-align:center;">Suas provas de hoje acabaram!</h2>'
                         + '<p class="q-pix-subtitle" style="text-align:center;">Você já usou suas provas gratuitas de hoje. Volte amanhã para experimentar mais modelos! 🩷</p>';
                 }
