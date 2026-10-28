@@ -2119,6 +2119,14 @@ setInterval(function(){var el=document.getElementById('q-step-error');if(!el)ret
             uploadStep.style.display = 'block';
         };
 
+        // ── RECORTES (foto com mais de uma armação → só a de lente transparente) ──
+        var PL_RECORTES_URL = 'https://quantic-supabase.k5jwra.easypanel.host/storage/v1/object/public/recortes-meninaflor/recortes.json';
+        function plRecortes() {
+            if (!plRecortes._p) plRecortes._p = fetch(PL_RECORTES_URL, { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; });
+            return plRecortes._p;
+        }
+        function plChaveImg(u) { var m = String(u || '').match(/\/img\/p\/([^?#]+)\.(jpe?g|png|webp)/i); return m ? m[1] : ''; }
+
         // ── GERAÇÃO PRINCIPAL ──
         async function runGeneration() {
             if (window.__plPlanLimit === true) return; // plano do mês estourado: não chama a geração
@@ -2213,9 +2221,18 @@ setInterval(function(){var el=document.getElementById('q-step-error');if(!el)ret
                     allProdImgs = allProdImgs.slice(0, _TETO);
                     console.log('[PL Menina Flor] Enviando', allProdImgs.length, 'fotos do produto (binário)');
                     let _primaryDone = false, _slot = 1;
+                    // 28/10/2026: foto com 2-3 armações (clip-on/solar + transparente) → manda o
+                    // RECORTE só da armação de lente transparente (mapa gerado 1×/dia). Falhou → original.
+                    let _mapaRec = {};
+                    try { _mapaRec = await Promise.race([plRecortes(), new Promise(function (r) { setTimeout(function () { r({}); }, 3000); })]) || {}; } catch (_) {}
                     for (let _pi = 0; _pi < allProdImgs.length; _pi++) {
                         try {
-                            const _b = await fetch(allProdImgs[_pi]).then(r => r.blob());
+                            let _b = null;
+                            try {
+                                const _rc = _mapaRec[plChaveImg(allProdImgs[_pi])];
+                                if (_rc) { const _rb = await fetch(_rc).then(r => r.ok ? r.blob() : null); if (_rb && /^image\//i.test(_rb.type)) { _b = _rb; console.log('[PL Menina Flor] recorte (só lente transparente):', _rc); } }
+                            } catch (_) {}
+                            if (!_b) _b = await fetch(allProdImgs[_pi]).then(r => r.blob());
                             if (!_b || !/^image\//i.test(_b.type)) continue; // pula HTML/nao-imagem -> evita 400 do gerador (ALTA DEMANDA)
                             if (!_primaryDone) {
                                 fd.append('product_image', _b, 'product.jpg'); _primaryDone = true;
