@@ -2128,6 +2128,20 @@ setInterval(function(){var el=document.getElementById('q-step-error');if(!el)ret
         }
         function plChaveImg(u) { var m = String(u || '').match(/\/img\/p\/([^?#]+)\.(jpe?g|png|webp)/i); return m ? m[1] : ''; }
 
+        // ── REFERÊNCIA ÚNICA POR PRODUTO (regra 28/10) ──
+        // 1º: recorte do ROSTO da modelo usando a armação de lente transparente (sem clip-on/solar,
+        //     sem o clip-on na mão). 2º sem modelo assim: recorte só da armação transparente do packshot.
+        // Mapa slug do produto → URL, gerado 1×/dia. Produto fora do mapa → regra antiga.
+        var PL_REFERENCIA_URL = 'https://lucasdecamargosilva.github.io/fbitsmeninaflor/referencia.json';
+        function plReferencia() {
+            if (!plReferencia._p) plReferencia._p = fetch(PL_REFERENCIA_URL, { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; });
+            return plReferencia._p;
+        }
+        function plSlugProduto(img) {
+            var k = plChaveImg(img); if (k) return k.split('/')[0];
+            var m = location.pathname.match(/\/produto\/([^/?#]+)/); return m ? m[1] : '';
+        }
+
         // ── GERAÇÃO PRINCIPAL ──
         async function runGeneration() {
             if (window.__plPlanLimit === true) return; // plano do mês estourado: não chama a geração
@@ -2219,6 +2233,11 @@ setInterval(function(){var el=document.getElementById('q-step-error');if(!el)ret
                             _TETO = 1;
                         }
                     } catch (e) {}
+                    if (!(_fixas && _fixas.length)) try {
+                        const _ref = await Promise.race([plReferencia(), new Promise(function (r) { setTimeout(function () { r({}); }, 3000); })]) || {};
+                        const _ru = _ref[plSlugProduto(prodImg || allProdImgs[0])];
+                        if (_ru) { allProdImgs = [_ru]; _TETO = 1; console.log('[PL Menina Flor] referência única:', _ru); }
+                    } catch (_) {}
                     allProdImgs = allProdImgs.slice(0, _TETO);
                     console.log('[PL Menina Flor] Enviando', allProdImgs.length, 'fotos do produto (binário)');
                     let _primaryDone = false, _slot = 1;
