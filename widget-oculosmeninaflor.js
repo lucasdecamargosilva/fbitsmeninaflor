@@ -1070,6 +1070,25 @@ setInterval(function(){var el=document.getElementById('q-step-error');if(!el)ret
 
 
     function init() {
+        // --- 28/10/2026 (Lucas): produto ESGOTADO não mostra o botão do provador ---
+        // A página marca como "Produto Indisponível"/"Avise-me" e o JSON-LD traz availability OutOfStock.
+        (function () {
+            function esgotado() {
+                try {
+                    var ld = document.querySelectorAll('script[type="application/ld+json"]'), txt = '';
+                    for (var i = 0; i < ld.length; i++) txt += ld[i].textContent || '';
+                    if (/schema\.org\/OutOfStock/i.test(txt) && !/schema\.org\/InStock/i.test(txt)) return true;
+                    var m = document.querySelector('.product-unavailable, .product-buttons__unavailable, .avise-me__button');
+                    return !!(m && m.offsetParent);
+                } catch (e) { return false; }
+            }
+            function esconde() {
+                if (document.getElementById('pl-esgotado-hide')) return;
+                try { var st = document.createElement('style'); st.id = 'pl-esgotado-hide'; st.textContent = '#q-open-ia,.q-btn-trigger-ia,.q-btn-inline-provador{display:none !important}'; document.head.appendChild(st); } catch (_) {}
+            }
+            var n = 0, t = setInterval(function () { if (esgotado()) { esconde(); clearInterval(t); } else if (++n > 20) clearInterval(t); }, 500);
+            if (esgotado()) esconde();
+        })();
         // --- CHECAGEM DE PLANO (endpoint central pl-plano-check): plano do mês estourado + interruptor ligado => esconde o provador ---
         try {
             fetch('https://n8n.segredosdodrop.com/webhook/pl-plano-check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dominio: location.hostname }) })
