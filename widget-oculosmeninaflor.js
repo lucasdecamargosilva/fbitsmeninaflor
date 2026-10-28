@@ -2120,7 +2120,8 @@ setInterval(function(){var el=document.getElementById('q-step-error');if(!el)ret
         };
 
         // ── RECORTES (foto com mais de uma armação → só a de lente transparente) ──
-        var PL_RECORTES_URL = 'https://quantic-supabase.k5jwra.easypanel.host/storage/v1/object/public/recortes-meninaflor/recortes.json';
+        // Fica no GitHub Pages deste repo: a CSP da loja (default-src) NAO libera o Supabase.
+        var PL_RECORTES_URL = 'https://lucasdecamargosilva.github.io/fbitsmeninaflor/recortes.json';
         function plRecortes() {
             if (!plRecortes._p) plRecortes._p = fetch(PL_RECORTES_URL, { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; });
             return plRecortes._p;
