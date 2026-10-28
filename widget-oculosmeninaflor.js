@@ -2128,7 +2128,7 @@ setInterval(function(){var el=document.getElementById('q-step-error');if(!el)ret
         }
         function plChaveImg(u) { var m = String(u || '').match(/\/img\/p\/([^?#]+)\.(jpe?g|png|webp)/i); return m ? m[1] : ''; }
 
-        // ── REFERÊNCIA ÚNICA POR PRODUTO (regra 28/10) ──
+        // ── REFERÊNCIA FIXA POR PRODUTO (regra 28/10): [armação sozinha em fundo branco, rosto da modelo] ──
         // 1º: recorte do ROSTO da modelo usando a armação de lente transparente (sem clip-on/solar,
         //     sem o clip-on na mão). 2º sem modelo assim: recorte só da armação transparente do packshot.
         // Mapa slug do produto → URL, gerado 1×/dia. Produto fora do mapa → regra antiga.
@@ -2236,7 +2236,7 @@ setInterval(function(){var el=document.getElementById('q-step-error');if(!el)ret
                     if (!(_fixas && _fixas.length)) try {
                         const _ref = await Promise.race([plReferencia(), new Promise(function (r) { setTimeout(function () { r({}); }, 3000); })]) || {};
                         const _ru = _ref[plSlugProduto(prodImg || allProdImgs[0])];
-                        if (_ru) { allProdImgs = [_ru]; _TETO = 1; console.log('[PL Menina Flor] referência única:', _ru); }
+                        if (_ru) { allProdImgs = Array.isArray(_ru) ? _ru.slice() : [_ru]; _TETO = allProdImgs.length; console.log('[PL Menina Flor] referência fixa:', allProdImgs); }
                     } catch (_) {}
                     allProdImgs = allProdImgs.slice(0, _TETO);
                     console.log('[PL Menina Flor] Enviando', allProdImgs.length, 'fotos do produto (binário)');
